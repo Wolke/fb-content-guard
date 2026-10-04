@@ -1,0 +1,15 @@
+:root { color-scheme: light; font-family: -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; color:#213c36; background:#f4f7f4; }
+* { box-sizing:border-box; } body { width:350px; margin:0; font-size:14px; }
+header { display:flex; align-items:center; gap:12px; padding:24px 22px 18px; border-bottom:1px solid #dce5df; }
+.mark { display:grid; place-items:center; background:#216652; color:white; border-radius:13px; width:44px; height:44px; font-size:21px; }
+h1 { margin:0; font-size:23px; letter-spacing:2px; } header p { margin:5px 0 0; font-size:12px; color:#60776d; }
+main { padding:20px 22px; } .toggle { display:flex; align-items:center; justify-content:space-between; font-weight:650; }
+input[type=checkbox] { accent-color:#216652; width:18px; height:18px; flex-shrink:0; }
+.hint,.foot { font-size:12px; line-height:1.7; color:#63766e; } .field { display:block; margin:22px 0 8px; font-weight:600; }
+input[type=password] { width:100%; padding:11px; border:1px solid #b8cbc0; border-radius:8px; background:white; }
+.consent { display:flex; gap:8px; align-items:flex-start; line-height:1.6; margin:18px 0; font-size:13px; }
+button { width:100%; border:1px solid #b8cbc0; border-radius:8px; padding:11px; margin-bottom:8px; color:#234d3f; background:white; cursor:pointer; font-weight:600; }
+button.primary { background:#216652; border-color:#216652; color:white; } button:disabled { opacity:.6; cursor:wait; }
+button:focus-visible,input:focus-visible { outline:3px solid #a5cdbd; outline-offset:2px; }
+#status { font-size:12px; line-height:1.6; overflow-wrap:anywhere; } .stats { padding:12px; border-radius:8px; background:#e7eee9; font-size:12px; line-height:1.8; }
+.foot { margin-bottom:0; }

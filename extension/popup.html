@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><link rel="stylesheet" href="popup.css"><title>清朗</title></head>
+<body>
+  <header><span class="mark">清</span><div><h1>清朗</h1><p>FB 色情內容遮擋 · 測試版</p></div></header>
+  <main>
+    <label class="toggle"><span>啟用首頁貼文遮擋</span><input id="enabled" type="checkbox"></label>
+    <p class="hint">先遮住，檢查後再顯示。只適用桌面版 FB 首頁的文字與靜態圖片。</p>
+    <label class="field" for="token">本機配對碼</label>
+    <input id="token" type="password" autocomplete="off" spellcheck="false" placeholder="執行 npm run setup 後取得">
+    <p class="hint">這裡填配對碼，不是 OpenAI API key。</p>
+    <label class="consent"><input id="consent" type="checkbox"><span>我同意將首頁貼文的文字與圖片，經本機服務送到 OpenAI 分析。</span></label>
+    <button id="save" class="primary">儲存設定</button>
+    <button id="health">檢查本機服務</button>
+    <p id="status" role="status" aria-live="polite"></p>
+    <div id="stats" class="stats">正在讀取此分頁狀態…</div>
+    <p class="foot">只改變本機畫面，不會向 FB 提交隱藏或檢舉。關閉本機服務時，未檢查貼文會保持遮擋。可能誤判，亦無法保證攔截所有內容。</p>
+  </main><script src="popup.js" type="module"></script>
+</body></html>
