@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="zh-Hant-TW">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="先遮住 Facebook 首頁已辨識的貼文，再經使用者同意交由 OpenAI 分類的 Chrome 擴充功能。">
+  <meta name="theme-color" content="#146a4c">
+  <title>清朗 · FB 色情內容遮擋</title>
+  <link rel="icon" href="icon128.png" type="image/png">
+  <link rel="stylesheet" href="site.css">
+</head>
+<body>
+<a class="skip" href="#main">跳至主要內容</a>
+<header><nav class="shell" aria-label="主要導覽">
+  <a class="brand" href="./"><img src="icon128.png" alt="" width="38" height="38">清朗</a>
+  <div class="navlinks"><a href="privacy.html">隱私權政策</a><a href="https://github.com/Wolke/fb-content-guard#readme">安裝說明</a><a href="https://github.com/Wolke/fb-content-guard/issues">問題回報</a></div>
+</nav></header>
+<main id="main" class="shell"><div class="eyebrow">清朗 / CHROME 擴充功能</div>
+    <h1>滑動之前，<br>先替貼文加一道遮罩。</h1>
+    <p class="lead">清朗會先遮住 Facebook 首頁已辨識的貼文，再經你的同意，將文字與靜態圖片交由 OpenAI 檢查色情內容。</p>
+    <div class="actions"><a class="button" href="https://github.com/Wolke/fb-content-guard#readme">查看安裝說明</a><a class="button secondary" href="privacy.html">閱讀隱私權政策</a></div>
+    <div class="note"><strong>目前為 0.1.0 原型，Chrome Web Store 尚未上架。</strong><br>需要桌面版 Chrome、Node.js 22 以上、本機服務，以及你自己的 OpenAI API key。尚未完成真實 Facebook 與 OpenAI API 的端到端驗收。</div>
+    <h2>如何運作</h2>
+    <ol><li>辨識 Facebook 首頁貼文，在檢查前先遮住內容。</li><li>經你同意後，由本機服務將貼文文字與圖片送往 OpenAI。</li><li>未被模型標記的內容顯示；疑似色情或無法檢查的內容保持遮擋。你可以手動展開。</li></ol>
+    <h2>保留你的控制權</h2>
+    <p>API key 存在你的電腦；開發者不營運接收貼文的中央伺服器。你可以撤回分析同意、停用或解除安裝。傳往 OpenAI 的內容依其 API 資料政策處理，並非保證零留存。</p>
+    <h2>使用前請了解</h2>
+    <p>目前只支援桌面版 Facebook 首頁的文字與已載入靜態圖片。影片不會自動放行。Facebook 版面變動可能造成漏檢，模型也可能誤判；無法保證所有內容都能在出現前遮住。</p>
+    <p>本版不會自動點擊 Facebook 的隱藏、檢舉或其他操作。完整功能限制與設定方式請參考 <a href="https://github.com/Wolke/fb-content-guard">公開原始碼與 README</a>。</p></main>
+<footer><div class="shell">清朗 · FB 色情內容遮擋 · 開發者 Wolke<br>本產品不是 Meta、Facebook 或 OpenAI 的官方產品。</div></footer>
+</body>
+</html>

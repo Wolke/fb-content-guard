@@ -8,7 +8,7 @@
 
 使用者啟用且同意分析後，擴充功能會讀取目前 Facebook 首頁貼文容器內的文字與已載入圖片。這可能包含貼文內容、作者名稱、頭像、已載入的留言、介面文字，以及圖片中可見的個人資訊。貼文本身也可能含健康、財務、付款、位置資訊或個人通訊的截圖；程式不會先剔除這些內容。這些資料僅用於色情內容檢查，不用來建立個人敏感資料檔案。
 
-圖片來源網址用於從 Facebook 的圖片 CDN 下載圖檔。程式不攜帶 Facebook Cookie 進行此下載。下載的圖檔內容與貼文文字，經使用者電腦上的本機服务送至 OpenAI Moderation API。本機服務只監聽 127.0.0.1，與 OpenAI 的連線使用 HTTPS。
+圖片來源網址用於從 Facebook 的圖片 CDN 下載圖檔。程式不攜帶 Facebook Cookie 進行此下載。下載的圖檔內容與貼文文字，經使用者電腦上的本機服務送至 OpenAI Moderation API。本機服務只監聽 127.0.0.1，與 OpenAI 的連線使用 HTTPS。
 
 程式不擷取整頁截圖、不讀取瀏覽器歷史紀錄資料庫、不取得 Facebook 密碼或 Cookie。為辨識貼文及處理首頁導覽，程式會在記憶體中讀取目前頁面網址及貼文內部分連結。
 
@@ -34,4 +34,8 @@
 
 ## 聯絡方式
 
-開發者：Wolke。隱私權問題可透過 [GitHub 個人頁面](https://github.com/Wolke) 所列的聯絡方式提出；請勿在公開留言附上金鑰、私人貼文或圖片。
+開發者：Wolke。一般隱私權問題可透過 [GitHub Issues](https://github.com/Wolke/fb-content-guard/issues) 提出；該頁為公開空間，請勿附上金鑰、私人貼文、圖片或其他個人資料。
+
+## 本網站
+
+本說明網站由 GitHub Pages 託管，沒有加入分析工具、廣告、Cookie 或追蹤程式。造訪網站時，GitHub 的託管服務適用其 [隱私權聲明](https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement)。網站本身不會讀取 Facebook 貼文，也不會呼叫 OpenAI。

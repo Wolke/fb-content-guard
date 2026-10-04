@@ -2,7 +2,9 @@
 
 個人使用的 Chrome Manifest V3 擴充功能，搭配只監聽 `127.0.0.1:43187` 的本機 Node.js 服務。先遮住貼文，再以 OpenAI `omni-moderation-latest` 檢查文字與靜態圖片。
 
-GitHub 儲存庫：`Wolke/fb-content-guard`。Chrome Web Store 尚未上架。
+GitHub 儲存庫：[Wolke/fb-content-guard](https://github.com/Wolke/fb-content-guard)（公開）。Chrome Web Store 尚未上架。
+
+[產品網站](https://wolke.github.io/fb-content-guard/) · [隱私權政策](https://wolke.github.io/fb-content-guard/privacy.html) · [問題回報](https://github.com/Wolke/fb-content-guard/issues)
 
 **目前是原型，尚未使用你的 FB 帳號和真實 API key 驗收。測試中的分類結果為模擬，不代表模型的實際準確率。**
 
@@ -111,3 +113,7 @@ npm run package
 產生 `dist/fb-content-guard-chrome-0.1.0.zip`，根目錄直接包含 manifest.json，且不含本機服務、金鑰或測試檔。GitHub Actions 也會測試並產出同樣的套件。
 
 商店文案及權限說明見 `store/LISTING.md`，隱私權政策見 `store/PRIVACY.md`，圖示與商店素材已包含在專案。這些是申請準備資料，不代表開發者註冊、正式送審或公開發布已完成。
+
+## 公開網站
+
+GitHub Pages 從 `main` 分支的 `docs/` 發布，不使用追蹤器或外部字型。修改 `store/PRIVACY.md` 後執行 `python3 scripts/build_site.py`，一併提交產生的 HTML，使網站與政策原始文件保持一致。
