@@ -49,7 +49,7 @@
 - store/assets/screenshot-1280x800.png：合成測試介面示意，畫面明確標示非實際 FB。
 - dist/fb-content-guard-chrome-0.1.0.zip：只包含擴充功能，manifest 位於根目錄。
 
-目前草稿設定為不公開列出的測試版本。開發者帳戶已註冊，隱私權政策、首頁、支援網址與測試操作說明均已在控制台儲存；仍待資料使用承諾確認與真實端到端驗收。最新狀態見 `SUBMISSION-STATUS.md`。
+目前草稿設定為不公開列出的測試版本。開發者帳戶已註冊，隱私權政策、首頁、支援網址與測試操作說明均已在控制台儲存；三項資料使用承諾已經發布者確認並儲存。表單已可提交，仍待真實端到端驗收，尚未送審。最新狀態見 `SUBMISSION-STATUS.md`。
 
 - 首頁：https://wolke.github.io/fb-content-guard/
 - 隱私權政策：https://wolke.github.io/fb-content-guard/privacy.html
