@@ -18,9 +18,14 @@ async function readPayload(request, maxBytes) {
   const reader = request.body.getReader();
   const chunks = [];
   let total = 0;
+  let timer, timedOut = false;
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(() => { timedOut = true; void reader.cancel().catch(() => {}); reject(new ServiceError('REQUEST_TIMEOUT', 408)); }, 8000);
+  });
   try {
     while (true) {
-      const { done, value } = await reader.read();
+      const { done, value } = await Promise.race([reader.read(), timeout]);
+      if (timedOut) throw new ServiceError('REQUEST_TIMEOUT', 408);
       if (done) break;
       total += value.byteLength;
       if (total > maxBytes) {
@@ -29,14 +34,14 @@ async function readPayload(request, maxBytes) {
       }
       chunks.push(value);
     }
-  } finally { reader.releaseLock(); }
+  } finally { clearTimeout(timer); reader.releaseLock(); }
   const bytes = new Uint8Array(total);
   let offset = 0;
   for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength; }
   let value;
   try { value = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes)); }
   catch { throw new ServiceError('INVALID_JSON'); }
-  return validatePayload(value);
+  return validatePayload(value, { maxImageBytes: 128 * 1024, maxTotalImageBytes: 512 * 1024 });
 }
 
 /**
@@ -46,7 +51,7 @@ async function readPayload(request, maxBytes) {
  * in durable storage before returning true. Refuse on storage failure. Reservations
  * count failed provider requests too. CORS is not authentication.
  *
- * No production entry point is supplied until those adapters are implemented.
+ * The Workers entry point supplies anonymous HMAC sessions and durable D1 quota.
  */
 export function createCloudHandler({ apiKey, extensionId, verifySession, reserveQuota,
   moderateImpl = moderate, maxBodyBytes = BODY_LIMIT } = {}) {

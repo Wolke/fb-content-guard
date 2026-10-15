@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="zh-Hant-TW">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="清朗 0.2.0 雲端版的內容處理、免登入連線及用量資料說明。">
+  <meta name="theme-color" content="#146a4c">
+  <title>雲端版隱私權政策｜清朗</title>
+  <link rel="icon" href="icon128.png" type="image/png">
+  <link rel="stylesheet" href="site.css">
+</head>
+<body>
+<a class="skip" href="#main">跳至主要內容</a>
+<header><nav class="shell" aria-label="主要導覽">
+  <a class="brand" href="./"><img src="icon128.png" alt="" width="38" height="38">清朗</a>
+  <div class="navlinks"><a href="privacy.html">隱私權政策</a><a href="https://github.com/Wolke/fb-content-guard#readme">安裝說明</a><a href="https://github.com/Wolke/fb-content-guard/issues">問題回報</a></div>
+</nav></header>
+<main id="main" class="shell"><div class="eyebrow">CLOUD PRIVACY / 雲端版政策草案</div><article><h1>清朗 · FB 色情內容遮擋 — 雲端版隱私權政策</h1>
+<p>草案日期：2026-10-15。適用版本：0.2.0 雲端版。正式部署與商店更新完成後適用；0.1.0 本機版請參考原有政策。</p>
+<p>清朗由 Wolke 開發，單一用途是在桌面版 Facebook 首頁檢查色情內容並調整貼文在本機的顯示方式。本產品不是 Meta、Facebook 或 OpenAI 官方產品。</p>
+<h2>使用者同意與處理內容</h2>
+<p>只有在使用者啟用功能並同意本版雲端分析後，擴充功能才開始傳送新的貼文分析要求。舊版對本機服務的同意不會自動授權雲端分析。</p>
+<p>程式讀取已辨識貼文容器中的文字和已載入圖片，可能包含作者、頭像、留言、介面文字，以及貼文中的個人識別、健康、財務／付款、位置資料或通訊截圖。程式不會先識別並刪除所有敏感資訊；這些內容僅用於色情分類，不用來建立個人敏感資料檔案。</p>
+<p>靜態圖片從 Facebook CDN 下載，不攜帶 Facebook Cookie。完整畫面縮為最長邊 512 像素的 JPEG 後，連同貼文文字透過 HTTPS 傳至清朗後台，再傳到 OpenAI Moderation API。沒有傳送原始 Facebook 圖片網址、完整頁面截圖、Facebook 密碼或 Cookie。</p>
+<p>程式不讀取瀏覽器歷史紀錄資料庫；目前頁面網址和部分貼文連結僅在分頁記憶體用於辨識內容及導覽。</p>
+<h2>接收資料的服務</h2>
+<ul><li>清朗後台由 Cloudflare Workers 處理請求，會暫時接觸提交的文字與圖檔，以完成轉送、大小驗證和用量限制。</li><li>OpenAI API 接收用於分類的文字與圖檔；處理及保留方式依其 <a href="https://developers.openai.com/api/docs/guides/your-data">API 資料政策</a>，本產品不保證零留存。</li><li>Cloudflare 為連線及安全運作會處理網路資料，適用其 <a href="https://www.cloudflare.com/privacypolicy/">隱私權政策</a>。</li></ul>
+<p>開發者不將貼文原文、圖片、原始圖片網址或 API key 寫入應用程式日誌／持久資料庫，不使用分析追蹤 SDK、廣告或資料販售。無法以此承諾第三方平台完全沒有其自身的安全／連線紀錄。</p>
+<h2>設定、匿名連線與保留時間</h2>
+<ul><li>啟用開關與雲端分析同意版本存於 Chrome 本機儲存，無 Chrome 同步。</li><li>免登入：不要求姓名、電子郵件或帳號。擴充功能自動取得匿名短期連線憑證，存於 Chrome 擴充功能的工作階段儲存，僅可信任的背景服務／設定頁可讀取，不提供給 Facebook 網頁。</li><li>憑證最長一小時有效，到 UTC 換日時提早到期；網路來源改變需重取。關閉瀏覽器後工作階段儲存會清除。</li><li>為限制匿名濫用，後台將連線 IP 與當日日期透過秘密金鑰計算派生識別碼，資料庫僅存派生碼、隨機 session 識別碼、操作類型與請求時間，不存原始 IP。派生碼屬用量控制資訊，不宣稱完全不可識別。</li><li>用量紀錄由每小時清除工作移除超過 48 小時的資料，正常情況保留最多約 49 小時；清除工作失敗時須排除故障後補刪。Cloudflare D1 平台備份／復原副本的保留另依其平台設定與政策。</li><li>分頁最多暫存 300 筆內容雜湊及分類結果，重新整理或切換網址時清除。</li><li>OpenAI API key 和服務簽章秘密只由開發者設定在後台，不包含在擴充功能內。</li></ul>
+<h2>使用者控制與刪除</h2>
+<p>可隨時撤回分析同意、關閉功能或解除安裝。撤回同意會清除擴充功能持有的匿名連線資料並停止新分析；已送往後台或 OpenAI 的請求可能仍會完成。每則貼文可以手動顯示。</p>
+<p>解除安裝移除本機設定；後台短期用量紀錄依上面的保存期限到期清除，避免重新安裝繞過服務限額。Chrome、Facebook、作業系統和服務供應商自身的資料處理不由本擴充功能控制。</p>
+<h2>使用限制與聯絡</h2>
+<p>資料僅用於色情內容分析、服務傳輸與必要的用量／防濫用控制，不出售、不用於廣告、信用評估或貸款。使用與轉移資料遵守 Chrome Web Store User Data Policy，包括 Limited Use 限制。</p>
+<p>一般隱私問題請透過 <a href="https://github.com/Wolke/fb-content-guard/issues">GitHub Issues</a> 聯絡 Wolke。此為公開空間，請不要附上貼文、圖片、金鑰或其他私人資訊。</p>
+<p>介紹和政策網站由 GitHub Pages 託管，沒有加入追蹤器、廣告或 Cookie；GitHub 的託管服務適用其 <a href="https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement">隱私權聲明</a>。</p></article></main>
+<footer><div class="shell">清朗 · FB 色情內容遮擋 · 開發者 Wolke<br>本產品不是 Meta、Facebook 或 OpenAI 的官方產品。</div></footer>
+</body>
+</html>

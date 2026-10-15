@@ -14,7 +14,7 @@ const post = (id, text, extra = '') => `<div role="article" id="${id}"><div clas
 async function fixture(html, config = {}) {
   const page = await context.newPage();
   const mock = `
-    window.testConfig = ${JSON.stringify({ enabled: true, consent: true, paired: true, ...config })};
+    window.testConfig = ${JSON.stringify({ enabled: true, consent: true, configured: true, ...config })};
     window.calls = []; window.handlers = []; window.releaseHeld = null;
     window.chrome = { runtime: {
       onMessage: { addListener: fn => window.handlers.push(fn) },
@@ -23,7 +23,7 @@ async function fixture(html, config = {}) {
         window.calls.push(message.payload);
         if(message.payload.text.includes('HOLD')) return new Promise(resolve => window.releaseHeld = resolve);
         await new Promise(resolve => setTimeout(resolve, 120));
-        if(message.payload.text.includes('FAIL')) return {ok:false,error:'PROVIDER_RATE_LIMIT'};
+        if(message.payload.text.includes('FAIL')) return {ok:false,error:'USAGE_LIMIT'};
         return {ok:true,decision:message.payload.text.includes('BLOCK')?'block':'allow'};
       }
     }};
@@ -140,28 +140,27 @@ try {
     await page.waitForFunction(() => document.documentElement.dataset.fgActive === 'false');
     assert.equal(await page.locator('#p .original').evaluate(e => e.inert), false); await page.close();
   });
-  await run('settings popup saves consent and pairing, and reports local service status', async () => {
+  await run('cloud popup has no pairing field, stores versioned consent, and reports service health', async () => {
     const page = await context.newPage();
     await page.addInitScript(() => {
-      window.saved = { enabled: true, consent: false, pairingToken: '' };
+      window.saved = { enabled: true, consentVersion: '' };
       window.chrome = {
         storage: { local: { setAccessLevel: async () => {}, get: async () => window.saved, set: async value => Object.assign(window.saved, value) } },
         runtime: { sendMessage: async () => ({ ok: true, configured: true, calls: 12, dailyLimit: 2000 }) },
         tabs: { query: async () => [{ id: 1 }], sendMessage: async () => ({ supported: true, enabled: true, total: 3, blocked: 1, pending: 1, errors: 1 }) }
       };
     });
-    for (const file of ['popup.html', 'popup.js', 'popup.css']) {
+    for (const file of ['popup.html', 'popup.js', 'popup.css', 'service-client.js']) {
       const body = await readFile(new URL('../extension/' + file, import.meta.url), 'utf8');
       await page.route('https://extension.test/' + file, route => route.fulfill({ contentType: file.endsWith('.js') ? 'text/javascript; charset=utf-8' : file.endsWith('.css') ? 'text/css' : 'text/html; charset=utf-8', body }));
     }
     await page.goto('https://extension.test/popup.html');
-    await page.locator('#token').fill('a'.repeat(64));
+    assert.equal(await page.locator('#token').count(), 0);
     await page.locator('#consent').check();
     await page.getByRole('button', { name: '儲存設定' }).click();
-    assert.equal(await page.evaluate(() => window.saved.consent), true);
-    assert.equal(await page.evaluate(() => window.saved.pairingToken.length), 64);
-    await page.getByRole('button', { name: '檢查本機服務' }).click();
-    await page.waitForFunction(() => document.getElementById('status').textContent.includes('12／2000'));
+    assert.equal(await page.evaluate(() => window.saved.consentVersion), 'cloud-v1');
+    await page.getByRole('button', { name: '檢查服務狀態' }).click();
+    await page.waitForFunction(() => document.getElementById('status').textContent.includes('雲端服務可連線'));
     await page.close();
   });
   const preview = await fixture(post('safe', 'NORMAL 今天去河濱散步，天氣很好。') + post('blocked', 'BLOCK 疑似色情分類的模擬結果') + post('fail', 'FAIL 模擬服務暫時無法連線'));

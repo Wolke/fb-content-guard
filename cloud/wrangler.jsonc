@@ -1,0 +1,22 @@
+{
+  "$schema": "../node_modules/wrangler/config-schema.json",
+  "name": "fb-content-guard",
+  "main": "entry.mjs",
+  "compatibility_date": "2026-10-15",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": true,
+  "observability": { "enabled": false },
+  "vars": {
+    "EXTENSION_ID": "pgncaeldodjlhkgmkknppnjephnnoobf",
+    "SERVICE_ENABLED": "false",
+    "DAILY_LIMIT": "1000",
+    "MINUTE_LIMIT": "15"
+  },
+  "d1_databases": [{
+    "binding": "DB",
+    "database_name": "fb-content-guard-usage",
+    "database_id": "00000000-0000-0000-0000-000000000000",
+    "migrations_dir": "migrations"
+  }],
+  "triggers": { "crons": ["17 * * * *"] }
+}

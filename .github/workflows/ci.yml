@@ -3,6 +3,8 @@ on:
   push:
     branches: [main]
   pull_request:
+env:
+  WRANGLER_SEND_METRICS: "false"
 permissions:
   contents: read
 jobs:
@@ -13,11 +15,14 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      - run: npm ci
       - name: Test server and background logic (mock API)
         run: npm test
-      - name: Validate and build extension ZIP
-        run: npm run package
+      - name: Verify compiled Workers runtime and D1
+        run: npm run test:runtime
+      - name: Validate and build development-only extension ZIP
+        run: npm run package:dev
       - uses: actions/upload-artifact@v4
         with:
-          name: chrome-extension
+          name: chrome-extension-development
           path: dist/*.zip

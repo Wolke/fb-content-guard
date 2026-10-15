@@ -13,3 +13,5 @@ button.primary { background:#216652; border-color:#216652; color:white; } button
 button:focus-visible,input:focus-visible { outline:3px solid #a5cdbd; outline-offset:2px; }
 #status { font-size:12px; line-height:1.6; overflow-wrap:anywhere; } .stats { padding:12px; border-radius:8px; background:#e7eee9; font-size:12px; line-height:1.8; }
 .foot { margin-bottom:0; }
+
+a { color:#165b44; text-underline-offset:3px; }

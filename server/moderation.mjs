@@ -2,7 +2,7 @@ export class ServiceError extends Error {
   constructor(code, status = 400) { super(code); this.code = code; this.status = status; }
 }
 
-export function validatePayload(value) {
+export function validatePayload(value, { maxImageBytes = 4 * 1024 * 1024, maxTotalImageBytes = 12 * 1024 * 1024 } = {}) {
   if (!value || typeof value.text !== 'string' || value.text.length > 16000 ||
       !Array.isArray(value.images) || value.images.length > 12) {
     throw new ServiceError('INVALID_CONTENT');
@@ -15,10 +15,10 @@ export function validatePayload(value) {
     }
     const data = image.slice(image.indexOf(',') + 1);
     const size = Buffer.byteLength(data, 'base64');
-    if (size > 4 * 1024 * 1024) throw new ServiceError('IMAGE_TOO_LARGE');
+    if (size > maxImageBytes) throw new ServiceError('IMAGE_TOO_LARGE');
     bytes += size;
   }
-  if (bytes > 12 * 1024 * 1024) throw new ServiceError('IMAGES_TOO_LARGE');
+  if (bytes > maxTotalImageBytes) throw new ServiceError('IMAGES_TOO_LARGE');
   return { text: value.text, images: value.images };
 }
 

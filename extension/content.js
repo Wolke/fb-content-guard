@@ -3,20 +3,23 @@
   const CANDIDATE = ':is([role="feed"], [role="main"]) :is([role="article"], [data-pagelet^="FeedUnit_"])';
   const records = new Map();
   const cache = new Map();
-  let enabled = true, consent = false, paired = false, running = 0, timer, url = location.href;
+  let enabled = true, consent = false, configured = false, running = 0, timer, url = location.href;
   const supported = () => location.hostname === 'www.facebook.com' && ['/', '/home.php'].includes(location.pathname);
   const active = () => enabled && supported();
   const setActive = () => document.documentElement?.setAttribute('data-fg-active', String(active()));
   setActive();
   const ERRORS = {
     CONSENT_REQUIRED: '請先在擴充功能設定中同意送出內容分析。',
-    PAIRING_REQUIRED: '請先設定本機配對碼。',
-    LOCAL_UNREACHABLE: '本機服務未啟動或連線逾時，請執行 npm start。',
-    API_KEY_MISSING: '本機服務尚未設定 OpenAI API key。',
-    API_KEY_INVALID: 'OpenAI 金鑰無效，請更新本機設定。',
-    PROVIDER_RATE_LIMIT: 'OpenAI 暫時限流，請稍後重試。',
-    DAILY_LIMIT: '已達本次服務的每日檢查上限。',
-    BUSY: '本機服務忙碌，請稍後重試。',
+    SERVICE_NOT_CONFIGURED: '此版本尚未連接正式服務，請等待開發者完成部署。',
+    SESSION_REQUIRED: '連線已到期，請稍後重試。',
+    SERVICE_UNREACHABLE: '暫時連不到分析服務，請稍後重試。',
+    SERVICE_UNAVAILABLE: '分析服務暫時無法使用。',
+    ANALYSIS_UNAVAILABLE: '內容分析未完成，保持遮擋。',
+    SERVICE_PAUSED: '分析服務目前暫停。',
+    SERVICE_COOLDOWN: '服務暫時忙碌或達到用量限制，請稍後重試。',
+    USAGE_LIMIT: '已達免費服務的用量限制，請稍後重試。',
+    REQUEST_TOO_LARGE: '貼文資料超過服務支援大小，保持遮擋。',
+    BUSY: '目前正在檢查其他貼文，請稍後重試。',
     IMAGE_FETCH_FAILED: '部分圖片無法讀取，尚未完成檢查。',
     IMAGE_TOO_LARGE: '圖片超出第一版支援大小，保持遮擋。',
     IMAGES_TOO_LARGE: '圖片總量過大，保持遮擋。',
@@ -164,7 +167,7 @@
     running++; record.checking = version;
     try {
       if (!consent) throw new Error('CONSENT_REQUIRED');
-      if (!paired) throw new Error('PAIRING_REQUIRED');
+      if (!configured) throw new Error('SERVICE_NOT_CONFIGURED');
       if (record.problem) throw new Error(record.problem);
       const key = await digest(sig);
       let decision = cache.get(key);
@@ -201,8 +204,8 @@
     try {
       const r = await chrome.runtime.sendMessage({ type: 'CONFIG' });
       if (!r?.ok) return;
-      const changed = enabled !== r.enabled || consent !== r.consent || paired !== r.paired;
-      enabled = Boolean(r.enabled); consent = Boolean(r.consent); paired = Boolean(r.paired);
+      const changed = enabled !== r.enabled || consent !== r.consent || configured !== r.configured;
+      enabled = Boolean(r.enabled); consent = Boolean(r.consent); configured = Boolean(r.configured);
       if (changed) for (const record of records.values()) { record.signature = ''; record.version++; }
       else for (const record of records.values()) if (record.state === 'error') { record.signature = ''; record.version++; }
       setActive(); scan();

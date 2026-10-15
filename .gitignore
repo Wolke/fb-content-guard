@@ -7,3 +7,8 @@ dist/
 .env
 .env.*
 !.env.example
+
+.wrangler/
+.dev.vars
+.dev.vars.*
+cloud/wrangler.local.jsonc

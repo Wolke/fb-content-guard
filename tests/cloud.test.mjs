@@ -80,3 +80,10 @@ test('provider failures and malformed results never release content or expose se
     assert.deepEqual(await response.json(), { error: 'ANALYSIS_UNAVAILABLE' });
   }
 });
+
+test('cloud image limits are enforced on the server, not just in the extension', async () => {
+  const { handler, calls } = fixture();
+  const image = 'data:image/jpeg;base64,' + Buffer.alloc(128 * 1024 + 1).toString('base64');
+  assert.equal((await handler(request({ text: 'fixture', images: [image] }))).status, 400);
+  assert.equal(calls.some(([kind]) => kind === 'provider' || kind === 'quota'), false);
+});
