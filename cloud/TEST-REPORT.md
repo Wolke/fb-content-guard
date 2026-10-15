@@ -12,6 +12,6 @@
 
 ## 不代表已完成的事項
 
-所有分類回應皆為測試替身。未使用真實 Facebook 貼文或 OpenAI API key。尚未在已登入的使用者 Facebook 頁面驗證選擇器／快速捲動／準確率；沒有公開 Workers 部署或 Cloudflare Free CPU 用量實測。
+所有分類回應皆為測試替身。未使用真實 Facebook 貼文或 OpenAI API key。尚未在已登入的使用者 Facebook 頁面驗證選擇器／快速捲動／準確率；Worker／D1 已完成停用狀態部署與資料表查驗，公開端點回應預期的未設定錯誤；尚未進行真實分類或 Cloudflare Free CPU 用量實測。
 
 免費服務容量、實際延遲、圖片縮小對分類的影響，以及目前商店審查／發布狀態，都不能由這些測試推定。正式上線前須依 DEPLOY.md 完成驗收。
