@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { ServiceError } from '../server/moderation.mjs';
 import { createCloudHandler } from '../cloud/handler.mjs';
 
 const origin = `chrome-extension://${'a'.repeat(32)}`;
@@ -86,4 +87,11 @@ test('cloud image limits are enforced on the server, not just in the extension',
   const image = 'data:image/jpeg;base64,' + Buffer.alloc(128 * 1024 + 1).toString('base64');
   assert.equal((await handler(request({ text: 'fixture', images: [image] }))).status, 400);
   assert.equal(calls.some(([kind]) => kind === 'provider' || kind === 'quota'), false);
+});
+
+test('provider rate limits trigger cooldown without exposing provider text', async () => {
+  const { handler } = fixture({ moderateImpl: async () => { throw new ServiceError('PROVIDER_RATE_LIMIT', 429); } });
+  const response = await handler(request());
+  assert.equal(response.status, 429);
+  assert.deepEqual(await response.json(), { error: 'SERVICE_COOLDOWN' });
 });

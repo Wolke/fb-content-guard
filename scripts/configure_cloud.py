@@ -15,7 +15,8 @@ args = parser.parse_args()
 u = urlparse(args.origin)
 if u.scheme != 'https' or not u.hostname or u.hostname in ('localhost', '127.0.0.1', '::1') or u.hostname.endswith('.invalid') or u.username or u.password or u.port or u.path or u.query or u.fragment or u.params:
     raise SystemExit('A public HTTPS origin is required.')
-with build_opener(NoRedirect()).open(Request(args.origin + '/v1/health'), timeout=20) as response:
+with build_opener(NoRedirect()).open(Request(args.origin + '/v1/health',
+        headers={'User-Agent': 'fb-content-guard-configure/0.2.0'}), timeout=20) as response:
     health = json.loads(response.read(4096))
 if health.get('version') != '0.2.0' or health.get('consentVersion') != 'cloud-v1' or health.get('ok') is not True:
     raise SystemExit('Deployed endpoint version/consent check failed.')

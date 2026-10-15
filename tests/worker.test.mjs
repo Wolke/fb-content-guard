@@ -120,3 +120,17 @@ test('scheduled cleanup removes expired usage while preserving recent counters',
     assert.equal(db.sqlite.prepare('SELECT COUNT(*) AS n FROM usage_events').get().n, 1);
   } finally { db.sqlite.close(); }
 });
+
+test('multi-image reservation is atomic and charges every upstream image call', async () => {
+  const db = database();
+  const limits = { kind: 'moderation', subject: 's', ip: 'ip', now: epoch,
+    daily: 8, minute: 8, ipDaily: 8, ipMinute: 8, sessionDaily: 8, units: 6 };
+  try {
+    const results = await Promise.all([reserveQuota(db, limits), reserveQuota(db, limits)]);
+    assert.equal(results.filter(Boolean).length, 1);
+    assert.equal(db.sqlite.prepare('SELECT COUNT(*) AS n FROM usage_events').get().n, 6);
+    assert.equal(await reserveQuota(db, { ...limits, units: 3 }), false);
+    assert.equal(await reserveQuota(db, { ...limits, units: 2 }), true);
+    assert.equal(db.sqlite.prepare('SELECT COUNT(*) AS n FROM usage_events').get().n, 8);
+  } finally { db.sqlite.close(); }
+});

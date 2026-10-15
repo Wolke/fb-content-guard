@@ -67,8 +67,8 @@ shutil.copyfile(ROOT / "extension/icons/icon128.png", OUT / "icon128.png")
     '''<div class="eyebrow">清朗 / CHROME 擴充功能</div>
     <h1>滑動之前，<br>先替貼文加一道遮罩。</h1>
     <p class="lead">清朗會先遮住 Facebook 首頁已辨識的貼文，再經你的同意，將文字與靜態圖片交由 OpenAI 檢查色情內容。</p>
-    <div class="actions"><a class="button" href="https://github.com/Wolke/fb-content-guard#readme">查看安裝說明</a><a class="button secondary" href="privacy-cloud.html">雲端版隱私權政策草案</a></div>
-    <div class="note"><strong>0.2.0 雲端改版開發中，尚未正式部署。</strong><br>新版目標是安裝、同意分析後即可使用，免登入、免配對碼，也不需要執行程式。既有 0.1.0 是需要本機服務的測試版；新版部署與真實 Facebook 驗收完成後才會更新商店。</div>
+    <div class="actions"><a class="button" href="https://github.com/Wolke/fb-content-guard#readme">查看安裝說明</a><a class="button secondary" href="privacy-cloud.html">雲端版隱私權政策</a></div>
+    <div class="note"><strong>0.2.0 雲端服務已部署，商店更新準備中。</strong><br>新版安裝、同意分析後即可使用，免登入、免配對碼，也不需要執行程式。既有 0.1.0 是需要本機服務的測試版；新版部署與真實 Facebook 驗收完成後才會更新商店。</div>
     <h2>如何運作</h2>
     <ol><li>辨識 Facebook 首頁貼文，在檢查前先遮住內容。</li><li>經你同意後，由清朗雲端服務將貼文文字與縮小的靜態圖片送往 OpenAI。</li><li>未被模型標記的內容顯示；疑似色情或無法檢查的內容保持遮擋。你可以手動展開。</li></ol>
     <h2>保留你的控制權</h2>
@@ -82,5 +82,5 @@ print("Built docs/index.html and docs/privacy.html")
 (OUT / "privacy-cloud.html").write_text(page(
     "雲端版隱私權政策｜清朗",
     "清朗 0.2.0 雲端版的內容處理、免登入連線及用量資料說明。",
-    '<div class="eyebrow">CLOUD PRIVACY / 雲端版政策草案</div><article>' + policy_html("store/PRIVACY-CLOUD.md") + '</article>',
+    '<div class="eyebrow">CLOUD PRIVACY / 雲端版隱私權政策</div><article>' + policy_html("store/PRIVACY-CLOUD.md") + '</article>',
 ))

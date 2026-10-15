@@ -15,7 +15,8 @@
   ],
   "host_permissions": [
     "https://www.facebook.com/*",
-    "https://*.fbcdn.net/*"
+    "https://*.fbcdn.net/*",
+    "https://fb-content-guard.wolkesau.workers.dev/*"
   ],
   "background": {
     "service_worker": "background.js",
@@ -44,5 +45,6 @@
       ],
       "run_at": "document_start"
     }
-  ]
+  ],
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAyPftBPWqAmsQtLacKphy8/MGkDsCcrt8ElZ54DxzlCyQDJJ3YI9CU86lz5r4BKFoQ10JkQYI0zJ8JTbbnbexhOzVM3JgZtXoxV8Tv47/oSCqL2I69o3vx5lfBKivgFd54YCOJZsC+fvqGv4LoS2PHyffR+vrAGE4ounzy9hDBvGBhb5fAFgetR/bbv4cdHM2EA4ZdoVgdXY+0EpRHnqtyYUAM5lstKwlc3+Xp5/2QIF3AMlx4DimzD1ela4Bnf7gTSBonA1vIg56ZpAS2z954ksaA592WC7bSQERE+AJcZ4gs46YYAE6u12Md9biSWAMkLIpH/EbtzDr33rsu5zFNwIDAQAB"
 }

@@ -1,5 +1,5 @@
 /* This file is injected before content.js. The active flag is set at document_start. */
-html[data-fg-active="true"] :is([role="feed"], [role="main"]) :is([role="article"], [data-pagelet^="FeedUnit_"]):not([data-fg-state]):not([data-fg-nested]) {
+html[data-fg-active="true"] :is([role="feed"], [role="main"]) :is([role="article"], [data-pagelet^="FeedUnit_"], div[aria-labelledby]:has([data-virtualized])):not([data-fg-state]):not([data-fg-nested]) {
   opacity: 0 !important;
 }
 html[data-fg-active="true"] [data-fg-state]:not([data-fg-state="allow"]):not([data-fg-state="manual"]) {

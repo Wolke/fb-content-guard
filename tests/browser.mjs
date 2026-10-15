@@ -53,9 +53,11 @@ async function run(name, fn) {
 }
 try {
   await run('shield before response, allow ordinary content, collapse flagged content', async () => {
-    const page = await fixture(post('normal', 'NORMAL 一般文字') + post('blocked', 'BLOCK 分類測試佔位文字'));
+    const page = await fixture(post('normal', 'HOLD 一般文字') + post('blocked', 'BLOCK 分類測試佔位文字'));
     await state(page, 'normal', 'pending');
     assert.equal(await page.locator('#normal .original').evaluate(e => getComputedStyle(e).visibility), 'hidden');
+    await page.waitForFunction(() => Boolean(window.releaseHeld));
+    await page.evaluate(() => window.releaseHeld({ ok: true, decision: 'allow' }));
     await state(page, 'normal', 'allow'); await state(page, 'blocked', 'block');
     assert.equal(await page.locator('#normal .original').evaluate(e => getComputedStyle(e).visibility), 'visible');
     assert.equal(await page.locator('#blocked .original').evaluate(e => getComputedStyle(e).display), 'none');
@@ -115,6 +117,40 @@ try {
     await state(page, 'p', 'allow');
     assert.equal(await page.locator('#p [role=article]').evaluate(e => getComputedStyle(e).opacity), '1');
     assert.equal(await page.evaluate(() => window.calls.length), 1); await page.close();
+  });
+  await run('modern labelled feed containers shield whole posts instead of comments', async () => {
+    const page = await fixture('<div id="modern" aria-labelledby="heading"><div data-virtualized="false"><h2 id="heading">HOLD</h2><p>主貼文</p><div role="article">留言</div></div></div>');
+    await state(page, 'modern', 'pending');
+    assert.equal(await page.locator('#modern > [data-virtualized]').evaluate(e => getComputedStyle(e).visibility), 'hidden');
+    await page.waitForFunction(() => Boolean(window.releaseHeld));
+    await page.evaluate(() => window.releaseHeld({ ok: true, decision: 'allow' }));
+    await state(page, 'modern', 'allow');
+    assert.equal(await page.locator('[data-fg-ui]').count(), 1);
+    assert.equal(await page.evaluate(() => window.calls[0].text.includes('主貼文')), true);
+    await page.close();
+  });
+  await run('SVG photos are classified and known emoji meaning stays in the text', async () => {
+    const emoji = '<img alt="😂" src="https://static.xx.fbcdn.net/images/emoji.php/v9/test.png">';
+    const page = await fixture(post('p', 'NORMAL', emoji.repeat(15) + '<svg><image href="https://s.fbcdn.net/avatar.png" width="32" height="32"/></svg>'));
+    await state(page, 'p', 'allow');
+    assert.deepEqual(await page.evaluate(() => window.calls[0].images), ['https://s.fbcdn.net/avatar.png']);
+    assert.equal(await page.evaluate(() => window.calls[0].text.includes('😂')), true);
+    await page.close();
+  });
+  await run('inline static SVG artwork is rasterized for analysis; animated artwork stays shielded', async () => {
+    const staticSrc = 'data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20"><rect width="20" height="20" fill="green"/></svg>');
+    const animatedSrc = 'data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20"><rect width="20" height="20"><animate attributeName="x" values="0;5" dur="1s"/></rect></svg>');
+    const page = await fixture(post('static', 'NORMAL', `<img src="${staticSrc}">`) + post('animated', 'NORMAL', `<img src="${animatedSrc}">`));
+    await state(page, 'static', 'allow'); await state(page, 'animated', 'error');
+    assert.equal(await page.evaluate(() => window.calls[0].images[0].startsWith('data:image/jpeg;base64,')), true);
+    assert.equal(await page.evaluate(() => window.calls.length), 1);
+    await page.close();
+  });
+  await run('background photos and image-role sprite sheets are included in classification', async () => {
+    const page = await fixture(post('p', 'NORMAL', '<object type="nested/pressable"><a>一般連結</a></object><i role="img" style="background-image:url(https://s.fbcdn.net/sprite.png)"></i><div style="background-image:url(https://s.fbcdn.net/photo.png)"></div>'));
+    await state(page, 'p', 'allow');
+    assert.deepEqual(await page.evaluate(() => window.calls[0].images), ['https://s.fbcdn.net/sprite.png', 'https://s.fbcdn.net/photo.png']);
+    await page.close();
   });
   await run('all images go into one classification request', async () => {
     const page = await fixture(post('p', 'NORMAL 多圖', '<img src="https://s.fbcdn.net/one.png"><img src="https://s.fbcdn.net/two.png">'));

@@ -27,7 +27,7 @@ font = lambda size: ImageFont.truetype(args.font, size)
 p.text((292, 93), '清朗', font=font(76), fill='#214e3e')
 p.text((295, 194), 'FB 色情內容遮擋', font=font(29), fill='#456556')
 p.text((95, 336), '先遮住，檢查後再顯示。', font=font(40), fill='#214e3e')
-p.text((95, 426), '需搭配本機服務與自己的 OpenAI API key', font=font(25), fill='#60776d')
+p.text((95, 426), '免登入 · 免 API key · 同意分析即可使用', font=font(25), fill='#60776d')
 promo.resize((440, 280), Image.Resampling.LANCZOS).save(assets / 'promo-440x280.png')
 
 preview = root / 'test-results/preview.png'

@@ -26,8 +26,9 @@ export async function readLimited(response, limit) {
   return bytes;
 }
 
-async function imageBytes(url, fetchImpl) {
-  if (!allowedImageUrl(url)) throw new Error('UNSUPPORTED_IMAGE');
+async function imageBytes(url, fetchImpl, allowInline = false) {
+  const inline = allowInline && typeof url === 'string' && url.length <= 180000 && /^data:image\/jpeg;base64,[A-Za-z0-9+/]+=*$/.test(url);
+  if (!inline && !allowedImageUrl(url)) throw new Error('UNSUPPORTED_IMAGE');
   let response;
   try {
     response = await fetchImpl(url, { credentials: 'omit', redirect: 'error', cache: 'no-store', signal: AbortSignal.timeout(12000) });
@@ -57,7 +58,7 @@ export async function imageDataUrl(url, fetchImpl = fetch) {
 }
 
 export async function cloudImageDataUrl(url, fetchImpl = fetch) {
-  const { bytes, mime } = await imageBytes(url, fetchImpl);
+  const { bytes, mime } = await imageBytes(url, fetchImpl, true);
   let bitmap;
   try {
     bitmap = await createImageBitmap(new Blob([bytes], { type: mime }));

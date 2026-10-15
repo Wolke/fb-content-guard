@@ -1,6 +1,6 @@
 (() => {
   'use strict';
-  const CANDIDATE = ':is([role="feed"], [role="main"]) :is([role="article"], [data-pagelet^="FeedUnit_"])';
+  const CANDIDATE = ':is([role="feed"], [role="main"]) :is([role="article"], [data-pagelet^="FeedUnit_"], div[aria-labelledby]:has([data-virtualized]))';
   const records = new Map();
   const cache = new Map();
   let enabled = true, consent = false, configured = false, running = 0, timer, url = location.href;
@@ -23,6 +23,9 @@
     IMAGE_FETCH_FAILED: '部分圖片無法讀取，尚未完成檢查。',
     IMAGE_TOO_LARGE: '圖片超出第一版支援大小，保持遮擋。',
     IMAGES_TOO_LARGE: '圖片總量過大，保持遮擋。',
+    UNSUPPORTED_EMBED: '包含尚不支援的嵌入內容。',
+    UNSUPPORTED_VECTOR: '內嵌向量圖無法轉換，保持遮擋。',
+    UNSUPPORTED_ROLE_IMAGE: '部分圖片缺少可讀取的來源，保持遮擋。',
     UNSUPPORTED_IMAGE: '包含目前不支援的圖片來源或格式。',
     ANIMATED_IMAGE: '第一版尚不分析動態圖片。',
     INCOMPLETE_IMAGES: '圖片尚未載入完成，保持遮擋。',
@@ -34,33 +37,77 @@
     PROVIDER_UNREACHABLE: 'OpenAI 連線失敗或逾時，請重試。'
   };
 
+  const inlineImages = new WeakMap();
+  function inlineSvg(img, source) {
+    const previous = inlineImages.get(img);
+    if (previous?.source === source) return previous.data;
+    const raw = source.slice(source.indexOf(',') + 1);
+    const svg = new DOMParser().parseFromString(source.slice(0, source.indexOf(',')).includes(';base64') ? atob(raw) : decodeURIComponent(raw), 'image/svg+xml');
+    // Only static inline vector artwork. Never silently classify an animated frame.
+    if (svg.documentElement.localName !== 'svg' || svg.querySelector('parsererror,animate,animateMotion,animateTransform,set,script,style,foreignObject,image,use,[style]')) throw Error('UNSUPPORTED_IMAGE');
+    const canvas = document.createElement('canvas');
+    const scale = Math.min(1, 512 / Math.max(img.naturalWidth, img.naturalHeight));
+    canvas.width = Math.max(1, Math.round(img.naturalWidth * scale));
+    canvas.height = Math.max(1, Math.round(img.naturalHeight * scale));
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+    const data = canvas.toDataURL('image/jpeg', 0.75);
+    inlineImages.set(img, { source, data });
+    return data;
+  }
+
   function snapshot(root) {
     const copy = root.cloneNode(true);
     copy.querySelectorAll('[data-fg-ui],script,style').forEach(n => n.remove());
+    // Known Facebook emoji assets carry their meaning in alt text; keep it for text classification.
+    const isEmoji = img => {
+      try { const u = new URL(img.currentSrc || img.src); return u.protocol === 'https:' && u.hostname === 'static.xx.fbcdn.net' && /^\/images\/emoji\.php\//.test(u.pathname) && Boolean(img.alt); }
+      catch { return false; }
+    };
+    copy.querySelectorAll('img').forEach(img => { if (isEmoji(img)) img.replaceWith(document.createTextNode(img.alt)); });
     const text = copy.textContent.replace(/\s+/g, ' ').trim();
     const identity = [...root.querySelectorAll('a[href]')].filter(a => !a.closest('[data-fg-ui]'))
       .map(a => a.getAttribute('href')).filter(h => /\/posts\/|\/permalink\/|story_fbid=|\/photo/.test(h)).join('|');
     let problem = '';
     if (root.querySelector('video,iframe,canvas')) problem = 'VIDEO';
-    if (root.querySelector('svg image,object,embed,[role="img"]:not(img):not(svg)')) problem ||= 'UNSUPPORTED_IMAGE';
+    if (root.querySelector('object:not([type="nested/pressable"]),object[data],embed')) problem ||= 'UNSUPPORTED_EMBED';
     if ([...root.querySelectorAll('a[href]')].some(a => /\/reel\/|\/watch\//.test(a.getAttribute('href') || ''))) problem = 'VIDEO';
     if (/(?:^|\s)\+\d+(?:\s|$)/.test(text) || [...copy.querySelectorAll('button,[role="button"]')]
       .some(b => /^(查看更多|顯示更多|更多內容|See more)$/i.test(b.textContent.trim()))) problem = 'PARTIAL_CONTENT';
     const images = [];
     const readiness = [];
     for (const img of root.querySelectorAll('img')) {
-      if (img.closest('[data-fg-ui]')) continue;
-      const source = img.currentSrc || img.src;
+      if (img.closest('[data-fg-ui]') || isEmoji(img)) continue;
+      let source = img.currentSrc || img.src;
+      if (source.startsWith('data:image/svg+xml') && img.complete && img.naturalWidth) {
+        try { source = inlineSvg(img, source); } catch { problem ||= 'UNSUPPORTED_VECTOR'; }
+      }
       // Include avatars too: filtering by dimensions risks skipping real small pictures.
       images.push(source);
       readiness.push(Boolean(img.complete && img.naturalWidth > 0));
       if (!source || !img.complete || !img.naturalWidth) problem ||= 'INCOMPLETE_IMAGES';
     }
-    // FB may use CSS background photos. An unhandled one must not be released as text-only.
-    for (const element of [root, ...root.querySelectorAll('[style]')]) {
-      if (!element.closest('[data-fg-ui]') && /url\(/i.test(element.style.backgroundImage)) problem ||= 'UNSUPPORTED_IMAGE';
+    // Facebook renders profile photos as SVG image nodes. Fetch and classify their full source too.
+    for (const img of root.querySelectorAll('svg image')) {
+      if (img.closest('[data-fg-ui]')) continue;
+      const source = img.href?.baseVal || '';
+      images.push(source);
+      if (!source) problem ||= 'INCOMPLETE_IMAGES';
     }
-    if (images.length > 12) problem = 'TOO_MANY_IMAGES';
+    // Analyze complete background assets too, including sprite sheets (never crop them).
+    for (const element of [root, ...root.querySelectorAll('[style],[role="img"]')]) {
+      if (element.closest('[data-fg-ui]')) continue;
+      const background = element.style.backgroundImage;
+      if (/url\(/i.test(background)) {
+        const urls = [...background.matchAll(/url\(["']?(.*?)["']?\)/g)].map(match => match[1]);
+        if (!urls.length) problem ||= 'UNSUPPORTED_IMAGE';
+        images.push(...urls);
+      } else if (element.getAttribute('role') === 'img' && !['IMG', 'svg'].includes(element.tagName)) {
+        problem ||= 'UNSUPPORTED_ROLE_IMAGE';
+      }
+    }
+    if (new Set(images).size > 12) problem = 'TOO_MANY_IMAGES';
     if (text.length > 16000) problem = 'LONG_TEXT';
     if (!text && !images.length) problem ||= 'EMPTY_CONTENT';
     const payload = { text, images: [...new Set(images)] };
@@ -227,7 +274,7 @@
     if (rescan) schedule();
   });
   observer.observe(document, { subtree: true, childList: true, characterData: true, attributes: true,
-    attributeFilter: ['src', 'srcset', 'href', 'style', 'role', 'data-pagelet'] });
+    attributeFilter: ['src', 'srcset', 'href', 'style', 'role', 'data-pagelet', 'aria-labelledby', 'data-virtualized', 'alt', 'data', 'type'] });
   document.addEventListener('load', event => {
     if (event.target instanceof HTMLImageElement) {
       for (const r of records.values()) if (r.root.contains(event.target)) inspect(r);

@@ -66,10 +66,10 @@ export async function handleCloudRequest(request, env, dependencies = {}) {
     const handler = createCloudHandler({ apiKey: env.OPENAI_API_KEY, extensionId: env.EXTENSION_ID,
       maxBodyBytes: MAX_BODY,
       verifySession: token => verifySession(token, { secret: env.SESSION_SECRET, audience: env.EXTENSION_ID, ip, now }),
-      reserveQuota: subject => reserveQuota(env.DB, { kind: 'moderation', subject, ip,
+      reserveQuota: (subject, units) => reserveQuota(env.DB, { kind: 'moderation', subject, ip, units,
         now: dependencies.now?.() ?? Math.floor(Date.now() / 1000),
         daily: positive(env.DAILY_LIMIT, 1000, 1000), minute: positive(env.MINUTE_LIMIT, 15, 15),
-        ipDaily: 200, ipMinute: 5, sessionDaily: 100 }),
+        ipDaily: 200, ipMinute: 15, sessionDaily: 100 }),
       ...(dependencies.moderateImpl ? { moderateImpl: dependencies.moderateImpl } : {})
     });
     return await handler(request);
