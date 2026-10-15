@@ -26,8 +26,9 @@ export async function readLimited(response, limit) {
   return bytes;
 }
 
-export async function imageDataUrl(url, fetchImpl = fetch) {
-  if (!allowedImageUrl(url)) throw new Error('UNSUPPORTED_IMAGE');
+async function imageBytes(url, fetchImpl, allowInline = false) {
+  const inline = allowInline && typeof url === 'string' && url.length <= 180000 && /^data:image\/jpeg;base64,[A-Za-z0-9+/]+=*$/.test(url);
+  if (!inline && !allowedImageUrl(url)) throw new Error('UNSUPPORTED_IMAGE');
   let response;
   try {
     response = await fetchImpl(url, { credentials: 'omit', redirect: 'error', cache: 'no-store', signal: AbortSignal.timeout(12000) });
@@ -43,7 +44,36 @@ export async function imageDataUrl(url, fetchImpl = fetch) {
   if ((mime === 'image/webp' && ascii.includes('ANIM')) || (mime === 'image/png' && ascii.includes('acTL'))) {
     throw new Error('ANIMATED_IMAGE');
   }
+  return { bytes, mime };
+}
+function asDataUrl(bytes, mime) {
   let binary = '';
   for (let i = 0; i < bytes.length; i += 0x8000) binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
   return { data: `data:${mime};base64,${btoa(binary)}`, size: bytes.length };
+}
+
+export async function imageDataUrl(url, fetchImpl = fetch) {
+  const { bytes, mime } = await imageBytes(url, fetchImpl);
+  return asDataUrl(bytes, mime);
+}
+
+export async function cloudImageDataUrl(url, fetchImpl = fetch) {
+  const { bytes, mime } = await imageBytes(url, fetchImpl, true);
+  let bitmap;
+  try {
+    bitmap = await createImageBitmap(new Blob([bytes], { type: mime }));
+    if (!bitmap.width || !bitmap.height) throw Error('INVALID_IMAGE');
+    const scale = Math.min(1, 512 / Math.max(bitmap.width, bitmap.height));
+    const canvas = new OffscreenCanvas(Math.max(1, Math.round(bitmap.width * scale)), Math.max(1, Math.round(bitmap.height * scale)));
+    const context = canvas.getContext('2d');
+    context.fillStyle = '#ffffff';
+    context.fillRect(0, 0, canvas.width, canvas.height);
+    context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    // Keep the complete image; never crop out content to meet the size budget.
+    const blob = await canvas.convertToBlob({ type: 'image/jpeg', quality: 0.75 });
+    if (blob.size > 128 * 1024) throw Error('IMAGE_TOO_LARGE');
+    return asDataUrl(new Uint8Array(await blob.arrayBuffer()), 'image/jpeg');
+  } catch (error) {
+    throw Error(error.message === 'IMAGE_TOO_LARGE' ? error.message : 'IMAGE_FETCH_FAILED');
+  } finally { bitmap?.close(); }
 }

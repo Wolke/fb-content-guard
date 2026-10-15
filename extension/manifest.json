@@ -1,18 +1,50 @@
 {
   "manifest_version": 3,
   "name": "清朗 · FB 色情內容遮擋",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "minimum_chrome_version": "120",
-  "icons": { "16": "icons/icon16.png", "32": "icons/icon32.png", "48": "icons/icon48.png", "128": "icons/icon128.png" },
-  "description": "先遮住 FB 首頁貼文，再透過本機服務與 OpenAI 檢查色情內容。個人測試版。",
-  "permissions": ["storage"],
-  "host_permissions": ["https://www.facebook.com/*", "http://127.0.0.1/*", "https://*.fbcdn.net/*"],
-  "background": { "service_worker": "background.js", "type": "module" },
-  "action": { "default_popup": "popup.html", "default_title": "清朗 · FB 內容遮擋", "default_icon": { "16": "icons/icon16.png", "32": "icons/icon32.png", "48": "icons/icon48.png", "128": "icons/icon128.png" } },
-  "content_scripts": [{
-    "matches": ["https://www.facebook.com/*"],
-    "js": ["content.js"],
-    "css": ["content.css"],
-    "run_at": "document_start"
-  }]
+  "icons": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "description": "先遮住 FB 首頁貼文，同意後交由雲端服務與 OpenAI 檢查色情內容。免登入，支援文字與靜態圖片。",
+  "permissions": [
+    "storage"
+  ],
+  "host_permissions": [
+    "https://www.facebook.com/*",
+    "https://*.fbcdn.net/*",
+    "https://fb-content-guard.wolkesau.workers.dev/*"
+  ],
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "清朗 · FB 內容遮擋",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "32": "icons/icon32.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://www.facebook.com/*"
+      ],
+      "js": [
+        "content.js"
+      ],
+      "css": [
+        "content.css"
+      ],
+      "run_at": "document_start"
+    }
+  ],
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAyPftBPWqAmsQtLacKphy8/MGkDsCcrt8ElZ54DxzlCyQDJJ3YI9CU86lz5r4BKFoQ10JkQYI0zJ8JTbbnbexhOzVM3JgZtXoxV8Tv47/oSCqL2I69o3vx5lfBKivgFd54YCOJZsC+fvqGv4LoS2PHyffR+vrAGE4ounzy9hDBvGBhb5fAFgetR/bbv4cdHM2EA4ZdoVgdXY+0EpRHnqtyYUAM5lstKwlc3+Xp5/2QIF3AMlx4DimzD1ela4Bnf7gTSBonA1vIg56ZpAS2z954ksaA592WC7bSQERE+AJcZ4gs46YYAE6u12Md9biSWAMkLIpH/EbtzDr33rsu5zFNwIDAQAB"
 }

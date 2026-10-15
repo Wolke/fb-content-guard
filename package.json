@@ -1,14 +1,25 @@
 {
   "name": "fb-content-guard",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
-  "engines": { "node": ">=22" },
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
-    "setup": "node server/setup.mjs",
-    "start": "node server/index.mjs",
     "test": "node --test tests/*.test.mjs",
     "test:browser": "node tests/browser.mjs",
-    "package": "python3 scripts/package.py"
+    "package": "python3 scripts/package.py",
+    "package:dev": "python3 scripts/package.py --development",
+    "cloud:dev": "wrangler dev --config cloud/wrangler.jsonc",
+    "cloud:check": "wrangler deploy --dry-run --config cloud/wrangler.jsonc --outdir dist/worker",
+    "test:runtime": "npm run cloud:check && node tests/runtime.mjs",
+    "test:images": "node tests/image-browser.mjs",
+    "legacy:setup": "node server/setup.mjs",
+    "legacy:start": "node server/index.mjs"
+  },
+  "devDependencies": {
+    "wrangler": "^4.151.0",
+    "miniflare": "5.20261012.0-beta"
   }
 }

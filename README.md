@@ -1,119 +1,71 @@
 # 清朗 · FB 色情內容遮擋
 
-個人使用的 Chrome Manifest V3 擴充功能，搭配只監聽 `127.0.0.1:43187` 的本機 Node.js 服務。先遮住貼文，再以 OpenAI `omni-moderation-latest` 檢查文字與靜態圖片。
+Chrome 擴充功能，目標是安裝後同意分析就能使用，**不需要登入、API key、本機配對碼、Node.js 或終端機**。
 
-GitHub 儲存庫：[Wolke/fb-content-guard](https://github.com/Wolke/fb-content-guard)（公開）。Chrome Web Store 尚未上架。
+**0.2.0 雲端服務已啟用，Chrome 商店更新準備中；目前公開版本仍為 0.1.0。** 新版尚未通過商店審查，部署和驗證紀錄見下方連結。
 
-[產品網站](https://wolke.github.io/fb-content-guard/) · [隱私權政策](https://wolke.github.io/fb-content-guard/privacy.html) · [問題回報](https://github.com/Wolke/fb-content-guard/issues)
+## 新版使用方式（部署與商店更新完成後）
 
-**目前是原型，尚未使用你的 FB 帳號和真實 API key 驗收。測試中的分類結果為模擬，不代表模型的實際準確率。**
+1. 安裝清朗。
+2. 開啟設定，閱讀並同意將首頁貼文文字與圖片交由清朗雲端服務及 OpenAI 分析。
+3. 儲存後重新整理 Facebook 首頁。
 
-## 安裝（第一次）
+已辨識的貼文會先遮擋，未被模型標記後再顯示。疑似色情、影片、無法檢查或超過免費用量時保持遮擋，可以手動顯示。設定頁可關閉遮擋、撤回分析同意與檢查服務狀態。舊本機版的分析同意不會自動延用到雲端版。
 
-需要桌面版 Chrome、Node.js 22 或更新版本，以及 OpenAI API key。執行 `node --version` 可確認 Node 版本。執行時不需要安裝 npm 套件。
+## 功能範圍
 
-1. 在 Terminal 切換到這份 README 所在的 `fb-content-guard` 資料夾。
-2. 執行：
+- 僅桌面版 `www.facebook.com` 首頁 `/`、`/home.php`，不支援群組、個人頁、Messenger 或手機 App。
+- 分析貼文容器的文字及已載入靜態 JPEG、PNG、WebP 圖片，以及可轉換的內嵌靜態 SVG 圖示；影片、動畫及未展開內容保持遮擋。
+- 每則最多 12 個不同圖片來源（含頭像、背景圖與圖示）、16,000 文字字元。圖片下載上限 4 MiB，保留完整畫面縮至最長邊 512 像素的 JPEG；單張轉換後最多 128 KiB，合計 512 KiB。縮圖可能影響小字和細節的判斷。
+- 遠端圖片下載限 HTTPS Facebook CDN；內嵌靜態 SVG 在瀏覽器轉成 JPEG，不攜帶 Cookie、不跟隨轉址。不擷取整頁截圖，也不點擊 Facebook 的隱藏或檢舉。
+- Facebook 版面可能改動，模型可能誤判／漏檢。此工具不能保證阻擋全部色情內容，也不是無法繞過的家長監護工具。
+- 模擬測試不代表真實 Facebook 適配或模型準確率已通過驗收。
 
-   ```bash
-   npm run setup
-   ```
+## 資料與免費額度
 
-   依提示輸入 API key；輸入過程不會顯示金鑰。程式會建立只有本機帳號能讀寫的 `server/.env`，並顯示一組**本機配對碼**。請先複製配對碼。不要將 API key 貼到聊天或擴充功能。
+資料流為擴充功能 → 清朗 HTTPS 雲端服務 → OpenAI Moderation。開發者在雲端保管 API key，終端使用者看不到，也不需申請金鑰。
 
-   想先測試介面，可以按 Enter 跳過金鑰；這時服務可連線，但不會放行未檢查貼文。之後重新執行 setup 會重設金鑰及配對碼。
+使用者同意後才開始新的內容分析。服務不把貼文原文、圖片或原始網址寫入應用資料庫／日誌。為防止匿名濫用，後台使用短期匿名 session、當日 IP 派生碼及請求時間做限流。一般工作階段一小時到期；資料庫計數預定 48–49 小時內清除，平台備份另依平台政策。詳見 [雲端版隱私權政策](store/PRIVACY-CLOUD.md)。
 
-3. 啟動服務，讓此 Terminal 持續開著：
+目前預設：全站每日最多 1,000 次圖片／文字分類、每分鐘 15 次；單一網路來源每日 200 次／每分鐘 15 次；單一匿名 session 每日 100 次。多圖貼文逐張檢查，每張計一次；純文字貼文計一次。整則貼文的所需額度會一次預留，不足時不送往 OpenAI；失敗或提前判定遮擋也不退還預留額度。全站硬上限不能因重新安裝或後台重啟而歸零。
 
-   ```bash
-   npm start
-   ```
+匿名限流不能完全阻止分散式濫用，遭濫用時可能耗盡免費額度而暫停服務。OpenAI 帳戶配額、Workers CPU／請求、D1 讀寫限制也可能更早到達。**不保證免費無限用量、不自動啟用付費方案或模型。**
 
-4. 在 Chrome 網址列輸入 `chrome://extensions`，開啟「開發人員模式」，點選「載入未封裝項目」，選擇本資料夾內的 **`extension`** 資料夾。
-5. 點擊工具列的「清朗」圖示，貼上**本機配對碼**，閱讀並勾選傳送貼文分析的同意選項，再按「儲存設定」。
-6. 點「檢查本機服務」，確認已連線且 API key 已設定。這項檢查不會呼叫 OpenAI，不能驗證金鑰是否有效。
-7. 開啟或重新整理 `https://www.facebook.com/`。若是安裝前已開啟的分頁，必須重新整理。
+## 開發者操作（一般使用者不需要執行）
 
-macOS 也可使用 `setup.command` 與 `start.command`；若系統不允許雙擊執行，請直接使用上述 Terminal 指令。
-
-## 日常使用
-
-- 保持 `npm start` 的 Terminal 開啟。`Ctrl+C` 停止服務。
-- 擴充功能的開關可以暫停遮擋；開關儲存後會通知已開啟的 FB 分頁。
-- 「正在檢查」：貼文先遮住，優先處理目前畫面及下方約 1,200 像素內的貼文，單分頁最多同時檢查 2 則。
-- 「已隱藏：疑似色情」：內容在本機收合，點「顯示此貼文」可展開。
-- 「尚未通過檢查」：讀圖失敗、服務未啟動、API 錯誤、未展開的內容或不支援的媒體。可重試，或自行決定顯示。
-- 「未被模型標記」只代表這次檢查結果，不是安全保證。誤判時可以手動展開。
-- 若 FB 在同一個頁面元素換入不同內容，會撤銷舊的放行或手動展開狀態，重新檢查。
-- 不會自動按 FB 的「隱藏貼文」、按讚、檢舉或發送訊息。
-
-## 支援範圍與限制
-
-- 僅 `www.facebook.com` 首頁 `/`、`/home.php`。其他 FB 頁面、群組、個人頁、Messenger、手機 App 不在此版範圍。
-- 偵測 `[role="article"]` 與 `FeedUnit_` 結構。FB 可能改版或對不同帳號提供不同版面，未辨識的區塊可能無法遮擋。彈出設定會顯示辨識數量；在有貼文的畫面上持續顯示 0，需要調整選擇器。
-- 僅文字和已載入的 JPEG、PNG、WebP 靜態圖片。GIF、偵測到的動畫、影片、Reels、canvas、iframe、未支援的媒體來源會保持遮擋，不會自動當作安全內容。
-- 圖片只允許 HTTPS `*.fbcdn.net` 來源，下載不攜帶 FB Cookie、不跟隨轉址。遇到需要額外驗證的圖片會失敗並保持遮擋。
-- 每則最多 12 個圖片元素（包含頭像）、單圖 4 MiB、合計 12 MiB，文字最多 16,000 字元。超過限制不截斷放行。
-- 已辨識的「查看更多」或多圖 `+N` 會保留遮罩；不會自動點開。未載入的內容無法分析，未辨識的特殊版型仍可能漏檢。
-- `sexual` 與文字的 `sexual/minors` 標記用於遮擋；不會因其他類別如暴力的 `flagged` 值而擋住。此版沒有「嚴格擦邊」分類器。
-- Moderation 不是兒少性虐待影像辨識工具；不要刻意提交已知或疑似此類素材作為測試資料。官方說明：https://developers.openai.com/api/docs/guides/moderation
-- 初始 CSS 與 DOM 變更監聽用來降低閃現，但尚不能保證所有 FB 版面與快速捲動情境都零閃現。
-- 此工具不是無法繞過的家長監護工具；使用者可關閉擴充功能或手動顯示內容。
-
-## 資料、權限與成本
-
-- 擴充功能取得貼文容器內的文字（可能包含作者、載入的留言與介面文字）及圖片（包含頭像），經本機服務傳給 OpenAI。沒有傳送整頁截圖、Cookie 或登入密碼。
-- `storage` 用於啟用設定、同意選項和本機配對碼。配對碼只在可信任的擴充功能頁面與背景服務可讀取。
-- FB 權限用於讀取與修改首頁 DOM；`fbcdn.net` 權限用於讀圖；`127.0.0.1` 權限用於連線固定本機服務。Chrome 的主機權限顯示可能涵蓋此主機所有連接埠，程式只呼叫 43187。
-- 原文、圖片與 API key 不寫入應用程式日誌；快取只在分頁記憶體保存最近 300 筆 SHA-256 內容識別與判斷。重新整理或離開首頁時快取清除。OpenAI 端的資料处理依其 API 資料政策，不代表零留存：https://developers.openai.com/api/docs/guides/your-data
-- API key 僅保存在本機 `server/.env`，不要分享此檔。配對碼不是 OpenAI key，但仍應保密。
-- Moderation API 目前免費且有速率限制。模型、價格和政策可能改變，以官方文件為準。
-- 預設每日最多 2,000 次 API 嘗試，可在 `.env` 調整 `FG_DAILY_LIMIT` 後重啟。計數在 UTC 午夜重設，也會在服務重啟時歸零；這是單次服務的流量保護，不是持久的帳單上限。失敗的 API 嘗試也计數。
-
-## 測試與開發
+需要 Node.js 22.13+、Python 3。首次安裝開發依賴：
 
 ```bash
+npm ci
 npm test
+npm run test:runtime
+npm run package:dev
 ```
 
-核心測試涵蓋分類格式、全圖提交、金鑰缺失、配對、來源/Host 限制、流量限制、CDN 來源白名單與錯誤時保持遮擋。
-
-可選的瀏覽器測試需要 Playwright：
+`test:runtime` 在本機 Cloudflare workerd 和 D1 執行，所有 OpenAI 回應均為模擬。可選的 Chrome 合成測試：
 
 ```bash
 npm install --no-save playwright
 npx playwright install chromium
 npm run test:browser
+npm run test:images
 ```
 
-瀏覽器測試只使用合成的 FB 類似結構與模擬 API 結果，不讀取帳號，也不呼叫 OpenAI。`CHROME_PATH` 可指定現有 Chrome 執行檔；`PLAYWRIGHT_MODULE` 可指定已安裝的 Playwright 模組路徑。實際結果見 `TEST-REPORT.md`。
+`CHROME_PATH` 可指定獨立無頭 Chrome 執行檔；`PLAYWRIGHT_MODULE` 可指定既有 Playwright 模組檔案。
 
-程式結構：
+- [執行計畫](cloud/EXECUTION-PLAN.md)
+- [後台架構與完成狀態](cloud/README.md)
+- [免費部署操作手冊](cloud/DEPLOY.md)
+- [正式部署進度](cloud/DEPLOYMENT-STATUS.md)
+- [雲端版測試紀錄](cloud/TEST-REPORT.md)
 
-```text
-extension/manifest.json   Chrome 權限與載入設定
-extension/content.js      貼文辨識、遮罩、排程、內容更新與快取
-extension/background.js   配對設定、跨來源讀圖、本機服務呼叫
-extension/net.js          圖片來源與大小限制
-extension/popup.*         設定與狀態介面
-server/setup.mjs          本機金鑰與配對碼初始化
-server/app.mjs            本機 HTTP 驗證與流量限制
-server/moderation.mjs     OpenAI Moderation 整合
-tests/                    模擬測試
-```
-
-要更新擴充功能：修改檔案後在 `chrome://extensions` 點「重新載入」，再重新整理 FB。
-
-## Chrome Web Store 打包
+部署完成後才由開發者執行：
 
 ```bash
+python3 scripts/configure_cloud.py https://實際部署的主機名稱
 npm run package
 ```
 
-產生 `dist/fb-content-guard-chrome-0.1.0.zip`，根目錄直接包含 manifest.json，且不含本機服務、金鑰或測試檔。GitHub Actions 也會測試並產出同樣的套件。
+設定工具會檢查服務版本，再將固定主機加入最小權限。正式套件檢查會拒絕未配置的網址和 localhost 權限；開發包檔名／顯示名稱會標記勿上架。能打包不代表已通過真實驗收。
 
-商店文案及權限說明見 `store/LISTING.md`，隱私權政策見 `store/PRIVACY.md`，圖示與商店素材已包含在專案。這些是申請準備資料，不代表開發者註冊、正式送審或公開發布已完成。
-
-## 公開網站
-
-GitHub Pages 從 `main` 分支的 `docs/` 發布，不使用追蹤器或外部字型。修改 `store/PRIVACY.md` 後執行 `python3 scripts/build_site.py`，一併提交產生的 HTML，使網站與政策原始文件保持一致。
+`server/` 保留 0.1.0 本機服務作回歸測試與開發參考，不屬於新版的使用流程。商店 ZIP 不包含伺服器原始碼、開發工具或秘密。

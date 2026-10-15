@@ -39,15 +39,18 @@ test('validates all pictures, limits text and rejects remote URLs at server boun
   assert.throws(() => validatePayload({ text: 'post', images: [image, 'https://127.0.0.1/image'] }), /INVALID_IMAGE/);
 });
 test('provider request includes every image and fixed model; errors do not expose provider text', async () => {
+  let calls = 0;
   const result = await moderate({ text: 'test', images: [image, image] }, 'test-key', async (url, init) => {
+    calls++;
     assert.equal(url, 'https://api.openai.com/v1/moderations');
     const body = JSON.parse(init.body);
     assert.equal(body.model, 'omni-moderation-latest');
-    assert.equal(body.input.length, 3);
-    assert.equal(body.input[2].image_url.url, image);
+    assert.equal(body.input.length, 2);
+    assert.equal(body.input[1].image_url.url, image);
     return Response.json(safe);
   });
   assert.equal(result.decision, 'allow');
+  assert.equal(calls, 2);
   await assert.rejects(moderate({ text: '', images: [image] }, 'test', async () => new Response('sensitive error', { status: 429 })), /PROVIDER_RATE_LIMIT/);
   await assert.rejects(moderate({ text: 'x', images: [] }, 'test', async () => { throw Error('secret'); }), /PROVIDER_UNREACHABLE/);
 });
@@ -103,4 +106,18 @@ test('downloads are byte bounded and reject animations', async () => {
   await assert.rejects(imageDataUrl('https://s.fbcdn.net/x', async () => new Response('RIFF ANIM', { headers: { 'Content-Type': 'image/webp' } })), /ANIMATED_IMAGE/);
   const result = await imageDataUrl('https://s.fbcdn.net/x', async () => new Response(new Uint8Array([1, 2, 3]), { headers: { 'Content-Type': 'image/jpeg' } }));
   assert.equal(result.data, 'data:image/jpeg;base64,AQID');
+});
+
+test('multi-image content is never allowed if a later image blocks or fails', async () => {
+  let calls = 0;
+  const result = await moderate({ text: 'test', images: [image, image, image] }, 'test', async () => {
+    calls++;
+    return Response.json(calls === 3 ? { results: [{ categories: { sexual: true, 'sexual/minors': false } }] } : safe);
+  });
+  assert.equal(calls, 3); assert.equal(result.decision, 'block');
+  let requests = 0;
+  await assert.rejects(moderate({ text: 'test', images: [image, image] }, 'test', async () => {
+    if (++requests === 2) return new Response('private details', { status: 400 });
+    return Response.json(safe);
+  }), /PROVIDER_BAD_REQUEST/);
 });

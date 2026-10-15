@@ -2,7 +2,7 @@ export class ServiceError extends Error {
   constructor(code, status = 400) { super(code); this.code = code; this.status = status; }
 }
 
-export function validatePayload(value) {
+export function validatePayload(value, { maxImageBytes = 4 * 1024 * 1024, maxTotalImageBytes = 12 * 1024 * 1024 } = {}) {
   if (!value || typeof value.text !== 'string' || value.text.length > 16000 ||
       !Array.isArray(value.images) || value.images.length > 12) {
     throw new ServiceError('INVALID_CONTENT');
@@ -15,10 +15,10 @@ export function validatePayload(value) {
     }
     const data = image.slice(image.indexOf(',') + 1);
     const size = Buffer.byteLength(data, 'base64');
-    if (size > 4 * 1024 * 1024) throw new ServiceError('IMAGE_TOO_LARGE');
+    if (size > maxImageBytes) throw new ServiceError('IMAGE_TOO_LARGE');
     bytes += size;
   }
-  if (bytes > 12 * 1024 * 1024) throw new ServiceError('IMAGES_TOO_LARGE');
+  if (bytes > maxTotalImageBytes) throw new ServiceError('IMAGES_TOO_LARGE');
   return { text: value.text, images: value.images };
 }
 
@@ -36,7 +36,7 @@ export function parseModeration(data) {
   };
 }
 
-export async function moderate(payload, apiKey, fetchImpl = fetch) {
+async function moderateSingle(payload, apiKey, fetchImpl, signal) {
   const input = [];
   if (payload.text.trim()) input.push({ type: 'text', text: payload.text });
   input.push(...payload.images.map(url => ({ type: 'image_url', image_url: { url } })));
@@ -46,16 +46,29 @@ export async function moderate(payload, apiKey, fetchImpl = fetch) {
       method: 'POST',
       headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({ model: 'omni-moderation-latest', input }),
-      signal: AbortSignal.timeout(22000)
+      signal
     });
   } catch { throw new ServiceError('PROVIDER_UNREACHABLE', 502); }
   if (!response.ok) {
     const code = response.status === 429 ? 'PROVIDER_RATE_LIMIT' :
-      response.status === 401 ? 'API_KEY_INVALID' : 'PROVIDER_ERROR';
+      response.status === 401 ? 'API_KEY_INVALID' : response.status === 400 ? 'PROVIDER_BAD_REQUEST' : 'PROVIDER_ERROR';
     throw new ServiceError(code, response.status === 429 ? 429 : 502);
   }
   let data;
   try { data = await response.json(); }
   catch { throw new ServiceError('INVALID_PROVIDER_RESPONSE', 502); }
   return parseModeration(data);
+}
+
+// The live endpoint rejects multi-image input. Check one complete image per request,
+// retain the post text with each image, and only allow after every image passed.
+export async function moderate(payload, apiKey, fetchImpl = fetch) {
+  const signal = AbortSignal.timeout(22000);
+  if (payload.images.length <= 1) return moderateSingle(payload, apiKey, fetchImpl, signal);
+  for (let i = 0; i < payload.images.length; i += 2) {
+    const results = await Promise.all(payload.images.slice(i, i + 2).map(image =>
+      moderateSingle({ text: payload.text, images: [image] }, apiKey, fetchImpl, signal)));
+    if (results.some(result => result.decision === 'block')) return { decision: 'block' };
+  }
+  return { decision: 'allow' };
 }
