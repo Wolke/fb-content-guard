@@ -1,6 +1,6 @@
-# Chrome Web Store 0.2.0 更新草稿
+# Chrome Web Store 0.2.0 送審資料
 
-免費後台已啟用；本文件為 0.2.0 商店更新資料。0.1.0 原有商店資料另存於 LISTING.md。
+免費後台已啟用；0.2.0 已於 2026-10-15 提交審查，核准後自動公開。0.1.0 原有商店資料另存於 LISTING.md。
 
 ## 商品說明
 
@@ -24,7 +24,7 @@
 
 使用者貼文會由開發者部署於 Cloudflare 的服務暫時處理，再轉交 OpenAI。維持對貼文可能含個人識別、健康、財務／付款、通訊及位置資料的保守揭露；另說明匿名 session、網路 IP 及其派生碼的防濫用用途，不可宣稱無後台接收資料或完全匿名。
 
-隱私權網址改為 `https://wolke.github.io/fb-content-guard/privacy-cloud.html`，上傳前必須確認已公開且草案標示已按真實部署狀態調整。三項聲明須與實作一致。
+隱私權網址改為 `https://wolke.github.io/fb-content-guard/privacy-cloud.html`，已確認公開可讀且移除草案標示，商店欄位已儲存。三項聲明與實作一致。
 
 ## 審查測試方式
 

@@ -13,4 +13,4 @@
 - 新政策已公開：https://wolke.github.io/fb-content-guard/privacy-cloud.html 。舊版本政策保留。
 - 已配置正式 HTTPS 主機與商店相同 extension ID。正式 ZIP 不含 API key、後台程式或 localhost 權限。
 
-Chrome Web Store 目前公開版本仍為 0.1.0；0.2.0 套件已上傳，說明、隱私揭露與測試步驟已儲存；待替換宣傳圖後送審。雲端部署成功不等於商店已核准新版。
+Chrome Web Store 目前公開版本仍為 0.1.0；0.2.0 套件、說明、隱私揭露、測試步驟與新版免登入宣傳圖已於 2026-10-15 提交。Google 顯示「你已將擴充功能提交審查」及「待審查」，並設定核准後自動公開。雲端部署成功不等於商店已核准新版。
