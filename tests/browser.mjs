@@ -14,9 +14,10 @@ const post = (id, text, extra = '') => `<div role="article" id="${id}"><div clas
 async function fixture(html, config = {}) {
   const page = await context.newPage();
   const mock = `
-    window.testConfig = ${JSON.stringify({ enabled: true, consent: true, configured: true, ...config })};
+    window.testConfig = ${JSON.stringify({ enabled: true, consent: true, configured: true, debug: true, ...config })};
     window.calls = []; window.handlers = []; window.releaseHeld = null;
     window.chrome = { runtime: {
+      getManifest: () => ({version_name: window.testConfig.debug ? '0.2.1-development' : '0.2.1'}),
       onMessage: { addListener: fn => window.handlers.push(fn) },
       sendMessage: async message => {
         if (message.type === 'CONFIG') return {ok:true,...window.testConfig};
@@ -61,6 +62,32 @@ try {
     await state(page, 'normal', 'allow'); await state(page, 'blocked', 'block');
     assert.equal(await page.locator('#normal .original').evaluate(e => getComputedStyle(e).visibility), 'visible');
     assert.equal(await page.locator('#blocked .original').evaluate(e => getComputedStyle(e).display), 'none');
+    await page.close();
+  });
+  await run('production hides pending, blocked and failed posts without cards or gaps', async () => {
+    const page = await fixture(post('normal', 'NORMAL') + post('pending', 'HOLD') + post('blocked', 'BLOCK') + post('failed', 'FAIL'), { debug: false });
+    await state(page, 'normal', 'allow'); await state(page, 'blocked', 'block'); await state(page, 'failed', 'error');
+    for (const id of ['pending', 'blocked', 'failed']) {
+      assert.equal(await page.locator('#' + id).evaluate(e => getComputedStyle(e).display), 'none');
+      assert.equal(await page.locator('#' + id).evaluate(e => e.getBoundingClientRect().height), 0);
+    }
+    assert.equal(await page.getByRole('button', {name: '重試'}).count(), 0);
+    assert.equal(await page.getByRole('button', {name: '顯示此貼文'}).count(), 0);
+    await page.evaluate(() => window.releaseHeld({ok:true,decision:'allow'}));
+    await state(page, 'pending', 'allow');
+    assert.equal(await page.locator('#pending .original').isVisible(), true);
+    await page.evaluate(() => window.updateConfig({enabled:false}));
+    await page.waitForFunction(() => !document.querySelector('#failed').hasAttribute('data-fg-state'));
+    assert.equal(await page.locator('#failed .original').isVisible(), true);
+    await page.close();
+  });
+  await run('collapsed production posts below the visible feed wait for scrolling', async () => {
+    const page = await fixture(post('top', 'NORMAL', '<div style="height:2400px">一般長貼文</div>') + post('below', 'NORMAL 下方貼文'), {debug:false});
+    await state(page, 'top', 'allow');
+    await page.waitForTimeout(800);
+    assert.equal(await page.evaluate(() => window.calls.some(p => p.text.includes('下方貼文'))), false);
+    await page.evaluate(() => scrollTo(0, 1800));
+    await state(page, 'below', 'allow');
     await page.close();
   });
   await run('manual reveal is revoked when Facebook reuses a post node', async () => {

@@ -1,6 +1,8 @@
 (() => {
   'use strict';
   const CANDIDATE = ':is([role="feed"], [role="main"]) :is([role="article"], [data-pagelet^="FeedUnit_"], div[aria-labelledby]:has([data-virtualized]))';
+  const debug = chrome.runtime.getManifest().version_name?.endsWith('-development') === true;
+  document.documentElement?.setAttribute('data-fg-debug', String(debug));
   const records = new Map();
   const cache = new Map();
   let enabled = true, consent = false, configured = false, running = 0, timer, url = location.href;
@@ -211,7 +213,7 @@
     }
   }
 
-  function create(root) {
+  function create(root, initialRect) {
     const ui = document.createElement('div');
     ui.setAttribute('data-fg-ui', 'post');
     const card = document.createElement('div'); card.className = 'fg-card';
@@ -220,7 +222,7 @@
     const retry = document.createElement('button'); retry.textContent = '重試'; retry.type = 'button';
     const show = document.createElement('button'); show.textContent = '顯示此貼文'; show.type = 'button';
     card.append(title, detail, retry, show); ui.append(card);
-    const record = { root, ui, title, detail, retry, inert: new Map(), videos: new Map(), signature: '', version: 0, state: 'pending', readyAt: 0 };
+    const record = { root, ui, title, detail, retry, inert: new Map(), videos: new Map(), signature: '', version: 0, state: 'pending', readyAt: 0, initialTop: initialRect.top + scrollY };
     root.append(ui); records.set(root, record);
     show.addEventListener('click', event => {
       event.preventDefault(); event.stopPropagation(); record.version++;
@@ -263,8 +265,10 @@
       else { node.removeAttribute('data-fg-nested'); roots.add(node); }
     }
     for (const r of [...records.values()]) if (!roots.has(r.root) || !r.root.isConnected) cleanup(r);
+    // Measure new posts before collapsing any of them, retaining initial queue order.
+    const initialRects = new Map([...roots].filter(root => !records.has(root)).map(root => [root, root.getBoundingClientRect()]));
     for (const root of roots) {
-      const record = records.get(root) || create(root);
+      const record = records.get(root) || create(root, initialRects.get(root));
       // Reattach if React replaced all the post's children.
       if (record.ui.parentNode !== root) root.append(record.ui);
       inspect(record);
@@ -309,10 +313,27 @@
       schedule();
     }
   }
+  function queueRect(record) {
+    if (debug || ['allow', 'manual'].includes(record.state)) return record.root.getBoundingClientRect();
+    // Collapsed posts have a zero rect. Locate their position in the feed using
+    // the preceding visible sibling so hidden posts far below the fold wait.
+    let previous = record.root.previousElementSibling;
+    while (previous) {
+      if (previous.getAttribute('data-fg-state') === 'pending') {
+        const top = record.initialTop - scrollY;
+        return { top, bottom: top };
+      }
+      const rect = previous.getBoundingClientRect();
+      if (rect.width || rect.height) return { top: rect.bottom, bottom: rect.bottom };
+      previous = previous.previousElementSibling;
+    }
+    const rect = record.root.parentElement.getBoundingClientRect();
+    return { top: rect.top, bottom: rect.top };
+  }
   function pump() {
     if (!active()) return;
     const queued = [...records.values()].filter(r => r.state === 'pending' && r.checking === undefined)
-      .map(r => ({ r, rect: r.root.getBoundingClientRect() }))
+      .map(r => ({ r, rect: queueRect(r) }))
       .filter(({ rect }) => rect.bottom >= -200 && rect.top <= innerHeight + 1200)
       .sort((a, b) => Math.abs(a.rect.top) - Math.abs(b.rect.top));
     for (const { r } of queued) {

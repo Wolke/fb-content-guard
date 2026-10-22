@@ -4,13 +4,13 @@
   <header><span class="mark">清</span><div><h1>清朗</h1><p>FB 色情內容遮擋</p></div></header>
   <main>
     <label class="toggle"><span>啟用首頁貼文遮擋</span><input id="enabled" type="checkbox"></label>
-    <p class="hint">先遮住，檢查後再顯示。檢查 FB 首頁目前載入的文字、圖片及影片預覽；展開後再檢查新內容，不檢查整段影片。</p>
+    <p class="hint">先隱藏，檢查後再顯示。檢查 FB 首頁目前載入的文字、圖片及影片預覽；展開後再檢查新內容，不檢查整段影片。</p>
     <label class="consent"><input id="consent" type="checkbox"><span>我同意將首頁貼文的文字與圖片（含影片封面或單張畫面），傳至清朗的雲端服務，再交由 OpenAI 分析色情內容。可能包含作者、留言及圖片中的個人資訊。</span></label>
     <p class="hint">不需要登入。服務會使用短期匿名代碼及網路來源的派生識別碼限制用量；不將貼文原文或圖片存進資料庫。<a href="https://wolke.github.io/fb-content-guard/privacy-cloud.html" target="_blank" rel="noopener">閱讀雲端版隱私權政策</a></p>
     <button id="save" class="primary">儲存設定</button>
     <button id="health">檢查服務狀態</button>
     <p id="status" role="status" aria-live="polite"></p>
     <div id="stats" class="stats">正在讀取此分頁狀態…</div>
-    <p class="foot">免費服務有用量限制。未完成檢查時會保持遮擋，你仍可手動顯示。只改變此電腦的畫面，不會向 FB 提交隱藏或檢舉。分類可能誤判或漏檢。</p>
+    <p class="foot">免費服務有用量限制。未完成檢查的內容會隱藏；可在此關閉遮擋。只改變此電腦的畫面，不會向 FB 提交隱藏或檢舉。分類可能誤判或漏檢。</p>
   </main><script src="popup.js" type="module"></script>
 </body></html>

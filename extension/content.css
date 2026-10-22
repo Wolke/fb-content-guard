@@ -51,3 +51,8 @@ html[data-fg-active="true"] [data-fg-state="allow"] [data-fg-ui="video"] {
 }
 [data-fg-ui="video"] img { display:block !important; width:100% !important; max-height:480px !important; object-fit:contain !important; }
 [data-fg-ui="video"] p { margin:10px 0 !important; }
+
+/* Production feeds show only checked content, without debug cards or gaps. */
+html[data-fg-active="true"][data-fg-debug="false"] [data-fg-state]:not([data-fg-state="allow"]):not([data-fg-state="manual"]) {
+  display: none !important;
+}
