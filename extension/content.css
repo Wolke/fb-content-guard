@@ -14,7 +14,7 @@ html[data-fg-active="true"] [data-fg-state]:not([data-fg-state="allow"]):not([da
 }
 html[data-fg-active="true"] [data-fg-state="block"] > :not([data-fg-ui]) { display: none !important; }
 [data-fg-ui] { display: none !important; }
-html[data-fg-active="true"] [data-fg-state]:not([data-fg-state="allow"]):not([data-fg-state="manual"]) > [data-fg-ui] {
+html[data-fg-active="true"] [data-fg-state]:not([data-fg-state="allow"]):not([data-fg-state="manual"]) > [data-fg-ui="post"] {
   display: flex !important;
   visibility: visible !important;
   position: absolute !important;
@@ -35,3 +35,24 @@ html[data-fg-active="true"] [data-fg-state]:not([data-fg-state="allow"]):not([da
 [data-fg-ui] .fg-detail { color:#63796c; font-size:12px; margin:0 0 13px; }
 [data-fg-ui] button { cursor:pointer; border:1px solid #b6ccbe; border-radius:7px; background:white; color:#28513f; padding:7px 12px; margin:0 4px; font:inherit; font-size:12px; }
 [data-fg-ui] button:focus-visible { outline:3px solid #83bca1; outline-offset:2px; }
+
+/* A passed still image must not unlock unexamined moving frames or autoplay. */
+html[data-fg-active="true"] video[data-fg-video-locked] { display: none !important; }
+html[data-fg-active="true"] [data-fg-state="allow"] [data-fg-ui="video"] {
+  display: block !important;
+  position: relative !important;
+  box-sizing: border-box !important;
+  width: 100% !important;
+  padding: 12px !important;
+  background: #f3f7f4 !important;
+  color: #254e3e !important;
+  text-align: center !important;
+  font: 13px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif !important;
+}
+[data-fg-ui="video"] img { display:block !important; width:100% !important; max-height:480px !important; object-fit:contain !important; }
+[data-fg-ui="video"] p { margin:10px 0 !important; }
+
+/* Production feeds show only checked content, without debug cards or gaps. */
+html[data-fg-active="true"][data-fg-debug="false"] [data-fg-state]:not([data-fg-state="allow"]):not([data-fg-state="manual"]) {
+  display: none !important;
+}

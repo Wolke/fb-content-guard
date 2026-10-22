@@ -14,9 +14,10 @@ const post = (id, text, extra = '') => `<div role="article" id="${id}"><div clas
 async function fixture(html, config = {}) {
   const page = await context.newPage();
   const mock = `
-    window.testConfig = ${JSON.stringify({ enabled: true, consent: true, configured: true, ...config })};
+    window.testConfig = ${JSON.stringify({ enabled: true, consent: true, configured: true, debug: true, ...config })};
     window.calls = []; window.handlers = []; window.releaseHeld = null;
     window.chrome = { runtime: {
+      getManifest: () => ({version_name: window.testConfig.debug ? '0.2.1-development' : '0.2.1'}),
       onMessage: { addListener: fn => window.handlers.push(fn) },
       sendMessage: async message => {
         if (message.type === 'CONFIG') return {ok:true,...window.testConfig};
@@ -61,6 +62,32 @@ try {
     await state(page, 'normal', 'allow'); await state(page, 'blocked', 'block');
     assert.equal(await page.locator('#normal .original').evaluate(e => getComputedStyle(e).visibility), 'visible');
     assert.equal(await page.locator('#blocked .original').evaluate(e => getComputedStyle(e).display), 'none');
+    await page.close();
+  });
+  await run('production hides pending, blocked and failed posts without cards or gaps', async () => {
+    const page = await fixture(post('normal', 'NORMAL') + post('pending', 'HOLD') + post('blocked', 'BLOCK') + post('failed', 'FAIL'), { debug: false });
+    await state(page, 'normal', 'allow'); await state(page, 'blocked', 'block'); await state(page, 'failed', 'error');
+    for (const id of ['pending', 'blocked', 'failed']) {
+      assert.equal(await page.locator('#' + id).evaluate(e => getComputedStyle(e).display), 'none');
+      assert.equal(await page.locator('#' + id).evaluate(e => e.getBoundingClientRect().height), 0);
+    }
+    assert.equal(await page.getByRole('button', {name: '重試'}).count(), 0);
+    assert.equal(await page.getByRole('button', {name: '顯示此貼文'}).count(), 0);
+    await page.evaluate(() => window.releaseHeld({ok:true,decision:'allow'}));
+    await state(page, 'pending', 'allow');
+    assert.equal(await page.locator('#pending .original').isVisible(), true);
+    await page.evaluate(() => window.updateConfig({enabled:false}));
+    await page.waitForFunction(() => !document.querySelector('#failed').hasAttribute('data-fg-state'));
+    assert.equal(await page.locator('#failed .original').isVisible(), true);
+    await page.close();
+  });
+  await run('collapsed production posts below the visible feed wait for scrolling', async () => {
+    const page = await fixture(post('top', 'NORMAL', '<div style="height:2400px">一般長貼文</div>') + post('below', 'NORMAL 下方貼文'), {debug:false});
+    await state(page, 'top', 'allow');
+    await page.waitForTimeout(800);
+    assert.equal(await page.evaluate(() => window.calls.some(p => p.text.includes('下方貼文'))), false);
+    await page.evaluate(() => scrollTo(0, 1800));
+    await state(page, 'below', 'allow');
     await page.close();
   });
   await run('manual reveal is revoked when Facebook reuses a post node', async () => {
@@ -157,10 +184,96 @@ try {
     await state(page, 'p', 'allow');
     assert.equal(await page.evaluate(() => window.calls[0].images.length), 2); await page.close();
   });
-  await run('unsupported video and unexpanded content do not get marked safe', async () => {
+  await run('unreadable video remains shielded while collapsed text can be checked', async () => {
     const page = await fixture(post('video', '影片', '<video></video>') + post('partial', '截斷文字', '<button>查看更多</button>'));
-    await state(page, 'video', 'error'); await state(page, 'partial', 'error');
-    assert.equal(await page.evaluate(() => window.calls.length), 0); await page.close();
+    await state(page, 'video', 'error'); await state(page, 'partial', 'allow');
+    assert.equal(await page.evaluate(() => window.calls.length), 1); await page.close();
+  });
+  await run('collapsed text and photo previews pass; expanded content is checked again', async () => {
+    const page = await fixture(post('p', 'NORMAL 目前顯示的文字', '<button>查看更多</button><img src="https://s.fbcdn.net/visible.png"><span>+5</span>'));
+    await state(page, 'p', 'allow');
+    assert.deepEqual(await page.evaluate(() => window.calls[0].images), ['https://s.fbcdn.net/visible.png']);
+    await page.locator('#p .original button').evaluate(button => button.addEventListener('click', () => {
+      document.querySelector('#p .original p').textContent += ' BLOCK 展開後才出現的文字';
+      button.remove();
+    }));
+    await page.getByRole('button', { name: '查看更多' }).click();
+    await state(page, 'p', 'pending'); await state(page, 'p', 'block');
+    assert.equal(await page.evaluate(() => window.calls.length), 2);
+    await page.close();
+  });
+  await run('video poster is checked; playback requires an explicit override', async () => {
+    const page = await fixture(post('p', 'NORMAL', '<video poster="https://s.fbcdn.net/poster.png" autoplay muted></video>'));
+    await state(page, 'p', 'allow');
+    assert.deepEqual(await page.evaluate(() => window.calls[0].images), ['https://s.fbcdn.net/poster.png']);
+    assert.equal(await page.locator('video').evaluate(e => getComputedStyle(e).display), 'none');
+    assert.equal(await page.locator('[data-fg-ui="video"]').isVisible(), true);
+    // Simulate Facebook attempting autoplay even after the preview passes.
+    await page.locator('video').evaluate(e => { window.pauses = 0; e.pause = () => window.pauses++; e.dispatchEvent(new Event('play')); });
+    assert.ok(await page.evaluate(() => window.pauses > 0));
+    await page.getByRole('button', { name: '播放影片（尚未完整檢查）' }).click();
+    await state(page, 'p', 'manual');
+    assert.notEqual(await page.locator('video').evaluate(e => getComputedStyle(e).display), 'none');
+    await page.locator('video').evaluate(e => e.poster = 'https://s.fbcdn.net/next.png');
+    await state(page, 'p', 'pending'); await state(page, 'p', 'allow');
+    assert.equal(await page.locator('video').evaluate(e => getComputedStyle(e).display), 'none');
+    assert.equal(await page.evaluate(() => window.calls.length), 2);
+    await page.evaluate(() => window.updateConfig({ enabled: false }));
+    await page.waitForFunction(() => !document.querySelector('[data-fg-ui="video"]'));
+    assert.equal(await page.locator('video').getAttribute('data-fg-video-locked'), null);
+    await page.close();
+  });
+  await run('late video poster retries automatically; Reels links alone do not block a static preview', async () => {
+    const page = await fixture(post('video', 'NORMAL', '<video></video>') + post('link', 'NORMAL', '<a href="/reel/123">Reel</a><img src="https://s.fbcdn.net/reel.png">'));
+    await state(page, 'video', 'error'); await state(page, 'link', 'allow');
+    await page.locator('video').evaluate(e => e.poster = 'https://s.fbcdn.net/late.png');
+    await state(page, 'video', 'allow');
+    assert.equal(await page.evaluate(() => window.calls.length), 2);
+    await page.close();
+  });
+  await run('a readable video frame is frozen and analysed once', async () => {
+    const page = await fixture(post('p', 'NORMAL', '<video muted></video>'));
+    await state(page, 'p', 'error');
+    await page.evaluate(() => {
+      const canvas = document.createElement('canvas'); canvas.width = 40; canvas.height = 30;
+      const ctx = canvas.getContext('2d'); ctx.fillStyle = 'green'; ctx.fillRect(0, 0, 40, 30);
+      window.frameCanvas = canvas;
+      const video = document.querySelector('video'); video.srcObject = canvas.captureStream(1);
+    });
+    await state(page, 'p', 'allow');
+    assert.equal(await page.evaluate(() => window.calls[0].images[0].startsWith('data:image/jpeg;base64,')), true);
+    assert.equal(await page.locator('video').evaluate(e => e.paused), true);
+    assert.equal(await page.locator('[data-fg-ui="video"] img').getAttribute('src'), await page.evaluate(() => window.calls[0].images[0]));
+    await page.evaluate(() => document.querySelector('video').dispatchEvent(new Event('loadeddata')));
+    await page.waitForTimeout(700);
+    assert.equal(await page.evaluate(() => window.calls.length), 1);
+    await page.close();
+  });
+  await run('an unreadable video frame stays shielded without a text-only request', async () => {
+    const page = await fixture(post('p', 'NORMAL', '<video muted></video>'));
+    await state(page, 'p', 'error');
+    await page.evaluate(() => {
+      const canvas = document.createElement('canvas'); canvas.width = 40; canvas.height = 30;
+      canvas.getContext('2d').fillRect(0, 0, 40, 30);
+      window.frameCanvas = canvas;
+      HTMLCanvasElement.prototype.toDataURL = () => { throw new DOMException('Tainted canvas', 'SecurityError'); };
+      const video = document.querySelector('video'); video.srcObject = canvas.captureStream(1);
+    });
+    await page.waitForFunction(() => document.querySelector('video').readyState >= 2);
+    await state(page, 'p', 'error');
+    assert.equal(await page.evaluate(() => window.calls.length), 0);
+    assert.equal(await page.locator('video').evaluate(e => getComputedStyle(e).display), 'none');
+    await page.close();
+  });
+  await run('stale video approval and unreadable embeds cannot expose new content', async () => {
+    const page = await fixture(post('p', 'HOLD', '<video poster="https://s.fbcdn.net/old.png"></video>') + post('embed', 'NORMAL', '<canvas></canvas>'));
+    await page.waitForFunction(() => Boolean(window.releaseHeld));
+    await page.locator('video').evaluate(e => e.removeAttribute('poster'));
+    await page.evaluate(() => window.releaseHeld({ ok: true, decision: 'allow' }));
+    await state(page, 'p', 'error'); await state(page, 'embed', 'error');
+    assert.equal(await page.locator('[data-fg-ui="video"]').isVisible(), false);
+    assert.equal(await page.evaluate(() => window.calls.length), 1);
+    await page.close();
   });
   await run('broken images and empty content stay shielded without provider calls', async () => {
     const page = await fixture(post('broken', '圖片', '<img src="https://s.fbcdn.net/missing.png">') + '<div role="article" id="empty"><div></div></div>');
