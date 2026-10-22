@@ -68,19 +68,19 @@ shutil.copyfile(ROOT / "extension/icons/icon128.png", OUT / "icon128.png")
     <h1>滑動之前，<br>先替貼文加一道遮罩。</h1>
     <p class="lead">清朗會先遮住 Facebook 首頁已辨識的貼文，再經你的同意，將文字與靜態圖片交由 OpenAI 檢查色情內容。</p>
     <div class="actions"><a class="button" href="https://github.com/Wolke/fb-content-guard#readme">查看安裝說明</a><a class="button secondary" href="privacy-cloud.html">雲端版隱私權政策</a></div>
-    <div class="note"><strong>0.2.0 雲端服務已部署，商店新版已送審。</strong><br>新版安裝、同意分析後即可使用，免登入、免配對碼，也不需要執行程式。既有 0.1.0 是需要本機服務的測試版；0.2.0 目前待 Google 審查，核准後自動公開。</div>
+    <div class="note"><strong>0.2.0 雲端版已在 Chrome 商店公開。</strong><br>安裝、同意分析後即可使用，免登入、免配對碼，也不需要執行程式。0.2.1 改為檢查目前顯示的內容，並新增影片預覽檢查，已完成測試，尚未送審。</div>
     <h2>如何運作</h2>
     <ol><li>辨識 Facebook 首頁貼文，在檢查前先遮住內容。</li><li>經你同意後，由清朗雲端服務將貼文文字與縮小的靜態圖片送往 OpenAI。</li><li>未被模型標記的內容顯示；疑似色情或無法檢查的內容保持遮擋。你可以手動展開。</li></ol>
     <h2>保留你的控制權</h2>
     <p>新版由開發者在後台保管 API key，不要求使用者提供。雲端服務會處理貼文，但不將原文或圖片存入應用資料庫。你可以撤回同意、停用或解除安裝。免費額度用完時會暫停分析；OpenAI 的資料處理依其 API 政策。</p>
     <h2>使用前請了解</h2>
-    <p>目前只支援桌面版 Facebook 首頁的文字與已載入靜態圖片。影片不會自動放行。Facebook 版面變動可能造成漏檢，模型也可能誤判；無法保證所有內容都能在出現前遮住。</p>
+    <p>目前只支援桌面版 Facebook 首頁。0.2.1 新增影片封面／單張畫面檢查，通過後顯示靜態預覽；整段影片尚未檢查，需手動播放。有「查看更多」或更多照片時，先檢查已載入的部分；展開後再檢查新增內容。Facebook 版面變動可能造成漏檢，模型也可能誤判；無法保證所有內容都能在出現前遮住。</p>
     <p>本版不會自動點擊 Facebook 的隱藏、檢舉或其他操作。完整功能限制與設定方式請參考 <a href="https://github.com/Wolke/fb-content-guard">公開原始碼與 README</a>。</p>''',
 ))
 print("Built docs/index.html and docs/privacy.html")
 
 (OUT / "privacy-cloud.html").write_text(page(
     "雲端版隱私權政策｜清朗",
-    "清朗 0.2.0 雲端版的內容處理、免登入連線及用量資料說明。",
+    "清朗 0.2.x 雲端版的內容處理、免登入連線及用量資料說明。",
     '<div class="eyebrow">CLOUD PRIVACY / 雲端版隱私權政策</div><article>' + policy_html("store/PRIVACY-CLOUD.md") + '</article>',
 ))

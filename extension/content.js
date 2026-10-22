@@ -30,8 +30,7 @@
     ANIMATED_IMAGE: '第一版尚不分析動態圖片。',
     INCOMPLETE_IMAGES: '圖片尚未載入完成，保持遮擋。',
     TOO_MANY_IMAGES: '圖片超過 12 張，保持遮擋。',
-    VIDEO: '第一版尚不分析影片或 Reels。',
-    PARTIAL_CONTENT: '貼文有未展開的內容，無法完整檢查。',
+    VIDEO_PREVIEW_UNAVAILABLE: '尚未取得影片封面或可讀取的畫面，載入後會自動重試。',
     LONG_TEXT: '貼文文字過長，保持遮擋。',
     EMPTY_CONTENT: '尚未取得可檢查的內容。',
     PROVIDER_UNREACHABLE: 'OpenAI 連線失敗或逾時，請重試。'
@@ -57,6 +56,71 @@
     return data;
   }
 
+  const videoPreviews = new WeakMap();
+  const mediaIds = new WeakMap();
+  let nextMediaId = 0;
+  function mediaId(object) {
+    if (!object) return null;
+    if (!mediaIds.has(object)) mediaIds.set(object, ++nextMediaId);
+    return mediaIds.get(object);
+  }
+  function videoPreview(video) {
+    const source = JSON.stringify([mediaId(video), mediaId(video.srcObject), video.currentSrc, video.getAttribute('src'), video.poster,
+      [...video.querySelectorAll('source')].map(node => [node.src, node.type])]);
+    const prior = videoPreviews.get(video);
+    if (prior?.source === source && prior.stream === video.srcObject) return prior;
+    // Prefer the poster. Otherwise freeze one readable frame, never the whole video.
+    let image = video.poster;
+    if (!image && video.readyState >= 2 && video.videoWidth && video.videoHeight) {
+      try {
+        const canvas = document.createElement('canvas');
+        const scale = Math.min(1, 512 / Math.max(video.videoWidth, video.videoHeight));
+        canvas.width = Math.max(1, Math.round(video.videoWidth * scale));
+        canvas.height = Math.max(1, Math.round(video.videoHeight * scale));
+        canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
+        image = canvas.toDataURL('image/jpeg', 0.75);
+      } catch { /* Cross-origin media may be unreadable; keep it shielded. */ }
+    }
+    const preview = { source, stream: video.srcObject, image };
+    // Retry unavailable frames when loadeddata fires. Successful previews stay frozen.
+    if (image) videoPreviews.set(video, preview);
+    return preview;
+  }
+
+  function syncVideoPreviews(record, previews) {
+    for (const [video, guard] of record.videos) {
+      if (!previews.some(item => item.video === video)) {
+        guard.ui.remove(); video.removeAttribute('data-fg-video-locked'); record.videos.delete(video);
+      }
+    }
+    for (const { video, image } of previews) {
+      let guard = record.videos.get(video);
+      if (!guard) {
+        const ui = document.createElement('div'); ui.setAttribute('data-fg-ui', 'video');
+        const img = document.createElement('img'); img.alt = '已檢查的影片預覽';
+        img.referrerPolicy = 'no-referrer';
+        const detail = document.createElement('p');
+        detail.textContent = '僅檢查封面／單張畫面，尚未檢查整段影片。';
+        const play = document.createElement('button'); play.type = 'button';
+        play.textContent = '播放影片（尚未完整檢查）';
+        ui.append(img, detail, play);
+        guard = { ui, img }; record.videos.set(video, guard);
+        play.addEventListener('click', event => {
+          event.preventDefault(); event.stopPropagation();
+          // Never apply a preview's approval to a recycled post or changed source.
+          const snap = snapshot(record.root);
+          if (snap.signature !== record.signature) { inspect(record); schedule(); return; }
+          record.version++; render(record, 'manual');
+          void video.play().catch(() => {});
+        });
+      }
+      guard.image = image;
+      if (guard.ui.previousSibling !== video) video.after(guard.ui);
+      video.toggleAttribute('data-fg-video-locked', record.state !== 'manual');
+      if (record.state !== 'manual') video.pause();
+    }
+  }
+
   function snapshot(root) {
     const copy = root.cloneNode(true);
     copy.querySelectorAll('[data-fg-ui],script,style').forEach(n => n.remove());
@@ -70,13 +134,16 @@
     const identity = [...root.querySelectorAll('a[href]')].filter(a => !a.closest('[data-fg-ui]'))
       .map(a => a.getAttribute('href')).filter(h => /\/posts\/|\/permalink\/|story_fbid=|\/photo/.test(h)).join('|');
     let problem = '';
-    if (root.querySelector('video,iframe,canvas')) problem = 'VIDEO';
+    if (root.querySelector('iframe,canvas')) problem = 'UNSUPPORTED_EMBED';
     if (root.querySelector('object:not([type="nested/pressable"]),object[data],embed')) problem ||= 'UNSUPPORTED_EMBED';
-    if ([...root.querySelectorAll('a[href]')].some(a => /\/reel\/|\/watch\//.test(a.getAttribute('href') || ''))) problem = 'VIDEO';
-    if (/(?:^|\s)\+\d+(?:\s|$)/.test(text) || [...copy.querySelectorAll('button,[role="button"]')]
-      .some(b => /^(查看更多|顯示更多|更多內容|See more)$/i.test(b.textContent.trim()))) problem = 'PARTIAL_CONTENT';
+    // Classify the currently loaded preview; expanding text/photos triggers a new snapshot.
     const images = [];
     const readiness = [];
+    const previews = [...root.querySelectorAll('video')].map(video => ({ video, ...videoPreview(video) }));
+    for (const preview of previews) {
+      if (preview.image) images.push(preview.image);
+      else problem ||= 'VIDEO_PREVIEW_UNAVAILABLE';
+    }
     for (const img of root.querySelectorAll('img')) {
       if (img.closest('[data-fg-ui]') || isEmoji(img)) continue;
       let source = img.currentSrc || img.src;
@@ -112,8 +179,8 @@
     if (!text && !images.length) problem ||= 'EMPTY_CONTENT';
     const payload = { text, images: [...new Set(images)] };
     // Readiness and identity participate in stale-response and recycled-node protection.
-    const signature = JSON.stringify([payload, identity, readiness, problem]);
-    return { payload, signature, problem };
+    const signature = JSON.stringify([payload, identity, readiness, problem, previews.map(p => p.source)]);
+    return { payload, signature, problem, previews };
   }
 
   function render(record, state, error = '') {
@@ -126,7 +193,13 @@
     record.retry.hidden = state !== 'error';
     // inert prevents focus/keyboard interaction with invisible original content.
     const shielded = !['allow', 'manual'].includes(state) && active();
-    if (shielded) record.root.querySelectorAll('video').forEach(video => video.pause());
+    for (const [video, guard] of record.videos) {
+      // Only load the visible preview after consent and classification have passed.
+      if (state === 'allow' && guard.image) guard.img.src = guard.image;
+      else guard.img.removeAttribute('src');
+      video.toggleAttribute('data-fg-video-locked', state !== 'manual');
+      if (state !== 'manual') video.pause();
+    }
     for (const child of record.root.children) {
       if (child === record.ui) continue;
       if (shielded) {
@@ -140,14 +213,14 @@
 
   function create(root) {
     const ui = document.createElement('div');
-    ui.setAttribute('data-fg-ui', '');
+    ui.setAttribute('data-fg-ui', 'post');
     const card = document.createElement('div'); card.className = 'fg-card';
     const title = document.createElement('span'); title.className = 'fg-title';
     const detail = document.createElement('p'); detail.className = 'fg-detail';
     const retry = document.createElement('button'); retry.textContent = '重試'; retry.type = 'button';
     const show = document.createElement('button'); show.textContent = '顯示此貼文'; show.type = 'button';
     card.append(title, detail, retry, show); ui.append(card);
-    const record = { root, ui, title, detail, retry, inert: new Map(), signature: '', version: 0, state: 'pending', readyAt: 0 };
+    const record = { root, ui, title, detail, retry, inert: new Map(), videos: new Map(), signature: '', version: 0, state: 'pending', readyAt: 0 };
     root.append(ui); records.set(root, record);
     show.addEventListener('click', event => {
       event.preventDefault(); event.stopPropagation(); record.version++;
@@ -164,6 +237,7 @@
 
   function inspect(record) {
     const snap = snapshot(record.root);
+    syncVideoPreviews(record, snap.previews);
     if (record.signature === snap.signature) return;
     record.signature = snap.signature; record.version++;
     record.payload = snap.payload; record.problem = snap.problem;
@@ -173,7 +247,7 @@
   function cleanup(record) {
     record.version++;
     for (const [element, prior] of record.inert) element.inert = prior;
-    record.inert.clear(); record.ui.remove(); record.root.removeAttribute('data-fg-state');
+    record.inert.clear(); syncVideoPreviews(record, []); record.ui.remove(); record.root.removeAttribute('data-fg-state');
     records.delete(record.root);
   }
   function scan() {
@@ -274,16 +348,26 @@
     if (rescan) schedule();
   });
   observer.observe(document, { subtree: true, childList: true, characterData: true, attributes: true,
-    attributeFilter: ['src', 'srcset', 'href', 'style', 'role', 'data-pagelet', 'aria-labelledby', 'data-virtualized', 'alt', 'data', 'type'] });
+    attributeFilter: ['src', 'srcset', 'href', 'style', 'role', 'data-pagelet', 'aria-labelledby', 'data-virtualized', 'alt', 'data', 'type', 'poster'] });
   document.addEventListener('load', event => {
     if (event.target instanceof HTMLImageElement) {
       for (const r of records.values()) if (r.root.contains(event.target)) inspect(r);
       schedule();
     }
   }, true);
+  for (const type of ['loadeddata', 'emptied']) document.addEventListener(type, event => {
+    if (!active() || !(event.target instanceof HTMLVideoElement)) return;
+    if (type === 'emptied') videoPreviews.delete(event.target);
+    for (const r of records.values()) if (r.root.contains(event.target)) inspect(r);
+    schedule();
+  }, true);
   document.addEventListener('play', event => {
     if (!active() || !(event.target instanceof HTMLVideoElement)) return;
-    for (const r of records.values()) if (r.root.contains(event.target) && !['allow', 'manual'].includes(r.state)) event.target.pause();
+    const record = [...records.values()].find(r => r.root.contains(event.target));
+    if (record) {
+      inspect(record);
+      if (record.state !== 'manual') event.target.pause();
+    } else if (event.target.closest(CANDIDATE)) event.target.pause();
   }, true);
   addEventListener('scroll', pump, { passive: true });
   addEventListener('resize', pump, { passive: true });
