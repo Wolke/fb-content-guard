@@ -1,6 +1,8 @@
 # Chrome Web Store 申請進度
 
-更新日期：2026-10-04。
+最新更新：2026-10-29。0.2.1 正式版已提交審查，控制台顯示「待審查」與「你已將擴充功能提交審查」。核准後自動公開，既有公開版為 0.2.0。詳見 [0.2.1 更新紀錄](RELEASE-0.2.1.md) 與 [雲端版送審資料](LISTING-CLOUD.md)。
+
+以下保留 2026-10-04 的 0.1.0 歷史紀錄，並非目前狀態。
 
 - GitHub： https://github.com/Wolke/fb-content-guard （已公開）
 - 產品網站：https://wolke.github.io/fb-content-guard/
