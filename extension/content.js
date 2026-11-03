@@ -8,7 +8,7 @@
     for (const link of document.querySelectorAll(SIDEBAR_CARD)) {
       if (link.closest('[data-fg-ui]')) continue;
       const rail = link.closest(SIDEBAR);
-      const knownRail = rail.hasAttribute('data-pagelet');
+      const knownRail = rail.matches('[data-pagelet="RightRail"], [data-pagelet^="RightRail_"], [data-pagelet*="Sponsored"]');
       const sponsored = knownRail || [...rail.querySelectorAll('h2,h3,[role="heading"]')]
         .some(h => /^(贊助|赞助|贊助內容|赞助内容|Sponsored)$/i.test(h.textContent.trim()));
       let ad = false;

@@ -113,7 +113,7 @@ try {
   });
   await run('labelled sponsored sidebar is discovered and reused ad cards are rechecked', async () => {
     const page = await fixture('', {debug:false,sidebar:`<aside role="complementary"><h2>Sponsored</h2>${ad('ad','NORMAL')}</aside>
-      <aside role="complementary"><h2>Help</h2>${ad('help','說明')}</aside>`});
+      <aside role="complementary" data-pagelet="HelpPanel"><h2>Help</h2>${ad('help','說明')}</aside>`});
     await state(page,'ad','allow');
     assert.equal(await page.locator('#help').getAttribute('data-fg-state'),null);
     await page.locator('#ad').evaluate(e=>e.href='https://advertiser.test/changed');
