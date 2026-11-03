@@ -1,7 +1,7 @@
 name: Test and package
 on:
   push:
-    branches: [main]
+    branches: [main, fix/moderation-backoff]
   pull_request:
 env:
   WRANGLER_SEND_METRICS: "false"
