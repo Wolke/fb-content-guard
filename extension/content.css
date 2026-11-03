@@ -1,3 +1,12 @@
+/* Shield right-column image links until discovery distinguishes ads from contacts. */
+html[data-fg-active="true"] :is([data-pagelet="RightRail"], [data-pagelet^="RightRail_"], [data-pagelet*="Sponsored"], [role="complementary"]) a[href]:has(img,svg image,[role="img"]):not([data-fg-state]):not([data-fg-nested]):not([data-fg-sidebar-ignore]) {
+  opacity: 0 !important;
+}
+/* Ad cards can be anchors with direct text nodes, unlike feed post containers. */
+html[data-fg-active="true"] a[data-fg-state]:not([data-fg-state="allow"]):not([data-fg-state="manual"]) {
+  color: transparent !important;
+  font-size: 0 !important;
+}
 /* This file is injected before content.js. The active flag is set at document_start. */
 html[data-fg-active="true"] :is([role="feed"], [role="main"]) :is([role="article"], [data-pagelet^="FeedUnit_"], div[aria-labelledby]:has([data-virtualized])):not([data-fg-state]):not([data-fg-nested]) {
   opacity: 0 !important;

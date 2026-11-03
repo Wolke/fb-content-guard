@@ -17,7 +17,7 @@ async function fixture(html, config = {}) {
     window.testConfig = ${JSON.stringify({ enabled: true, consent: true, configured: true, debug: true, ...config })};
     window.calls = []; window.handlers = []; window.releaseHeld = null;
     window.chrome = { runtime: {
-      getManifest: () => ({version_name: window.testConfig.debug ? '0.2.1-development' : '0.2.1'}),
+      getManifest: () => ({version_name: window.testConfig.debug ? '0.2.3-development' : '0.2.3'}),
       onMessage: { addListener: fn => window.handlers.push(fn) },
       sendMessage: async message => {
         if (message.type === 'CONFIG') return {ok:true,...window.testConfig};
@@ -35,7 +35,7 @@ async function fixture(html, config = {}) {
     body{background:#e9efeb;font-family:system-ui;margin:0}main{max-width:640px;margin:35px auto}
     header{color:#275642;margin-bottom:24px} [role=article]{background:white;margin-bottom:18px;padding:24px;border-radius:10px;min-height:180px;box-sizing:border-box}
     h2{font-size:16px}p{line-height:1.7}.original{min-height:150px}
-    ${css}</style><script>${mock}</script><script>${script}</script></head><body><main role="main"><header><h1>清朗 · 測試動態牆</h1><p>合成內容與模擬分類，不是實際 Facebook。</p></header><div role="feed">${html}</div></main></body></html>` }));
+    ${css}</style><script>${mock}</script><script>${script}</script></head><body><main role="main"><header><h1>清朗 · 測試動態牆</h1><p>合成內容與模擬分類，不是實際 Facebook。</p></header><div role="feed">${html}</div></main>${config.sidebar || ""}</body></html>` }));
   await page.route('https://s.fbcdn.net/**', route => route.fulfill({ contentType: 'image/png', body: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+j7ioAAAAASUVORK5CYII=', 'base64') }));
   await page.goto('https://www.facebook.com/');
   return page;
@@ -90,6 +90,57 @@ try {
     await page.evaluate(() => scrollTo(0, 1800));
     await state(page, 'below', 'allow');
     await page.close();
+  });
+  const ad = (id, text, href = 'https://advertiser.test/item') => `<a id="${id}" href="${href}"><img src="https://s.fbcdn.net/ad.png"><span>${text}</span></a>`;
+  await run('right rail ads are checked independently; contacts and friend requests are excluded', async () => {
+    const page = await fixture('', {debug:false, sidebar:`<aside data-pagelet="RightRail"><h2>贊助</h2>
+      ${ad('heldAd','HOLD 廣告')}${ad('badAd','BLOCK 廣告','https://l.facebook.com/l.php?u=https%3A%2F%2Fadvertiser.test')}
+      ${ad('goodAd','NORMAL 廣告')}${ad('failedAd','FAIL 廣告')}
+      <section id="friends">${ad('friend','好友邀請','/profile.php?id=1')}<button>確認</button></section>
+      ${ad('contact','聯絡人','https://www.facebook.com/profile.php?id=2')}</aside>`});
+    await state(page,'badAd','block'); await state(page,'goodAd','allow'); await state(page,'failedAd','error');
+    for (const id of ['heldAd','badAd','failedAd']) assert.equal(await page.locator('#'+id).isVisible(),false);
+    for (const id of ['friend','contact']) {
+      assert.equal(await page.locator('#'+id).getAttribute('data-fg-state'),null);
+      assert.equal(await page.locator('#'+id).evaluate(e=>getComputedStyle(e).opacity),'1');
+    }
+    assert.equal(await page.evaluate(()=>window.calls.length),4);
+    assert.equal(await page.evaluate(()=>window.calls.some(p=>/好友邀請|聯絡人/.test(p.text))),false);
+    await page.evaluate(()=>window.releaseHeld({ok:true,decision:'allow'})); await state(page,'heldAd','allow');
+    await page.evaluate(()=>window.updateConfig({enabled:false}));
+    await page.waitForFunction(()=>!document.querySelector('#badAd').hasAttribute('data-fg-state'));
+    assert.equal(await page.locator('#badAd').isVisible(),true); await page.close();
+  });
+  await run('labelled sponsored sidebar is discovered and reused ad cards are rechecked', async () => {
+    const page = await fixture('', {debug:false,sidebar:`<aside role="complementary"><h2>Sponsored</h2>${ad('ad','NORMAL')}</aside>
+      <aside role="complementary"><h2>Help</h2>${ad('help','說明')}</aside>`});
+    await state(page,'ad','allow');
+    assert.equal(await page.locator('#help').getAttribute('data-fg-state'),null);
+    await page.locator('#ad').evaluate(e=>e.href='https://advertiser.test/changed');
+    await page.waitForFunction(()=>window.calls.length===2); await state(page,'ad','allow');
+    await page.locator('#ad span').evaluate(e=>e.textContent='BLOCK 已替換廣告');
+    await state(page,'ad','block'); assert.equal(await page.locator('#ad').isVisible(),false);
+    assert.equal(await page.evaluate(()=>window.calls.length),3); await page.close();
+  });
+  await run('dynamically inserted sidebar ads wait hidden for images and quota', async () => {
+    const page = await fixture('', {debug:false});
+    await page.evaluate(html=>document.body.insertAdjacentHTML('beforeend',html),
+      `<aside data-pagelet="RightRail">${ad('ad','THROTTLE')}</aside>`);
+    await state(page,'ad','waiting'); assert.equal(await page.locator('#ad').isVisible(),false);
+    await state(page,'ad','allow');
+    await page.locator('#ad img').evaluate(e=>e.src='data:image/png;base64,invalid');
+    await state(page,'ad','waiting'); assert.equal(await page.locator('#ad').isVisible(),false);
+    assert.equal(await page.evaluate(()=>window.calls.length),2);
+    await page.locator('#ad img').evaluate(e=>e.src='https://s.fbcdn.net/loaded-ad.png');
+    await state(page,'ad','allow'); assert.equal(await page.evaluate(()=>window.calls.length),3); await page.close();
+  });
+  await run('sidebar ads remain hidden without consent and are excluded from off-home pages', async () => {
+    const page = await fixture('', {debug:false,consent:false,sidebar:`<aside data-pagelet="RightRail">${ad('ad','NORMAL')}</aside>`});
+    await state(page,'ad','error'); assert.equal(await page.locator('#ad').isVisible(),false);
+    assert.equal(await page.evaluate(()=>window.calls.length),0);
+    await page.evaluate(()=>history.pushState({},'', '/groups/test'));
+    await page.waitForFunction(()=>document.documentElement.dataset.fgActive==='false');
+    assert.equal(await page.locator('#ad').isVisible(),true); await page.close();
   });
   await run('manual reveal is revoked when Facebook reuses a post node', async () => {
     const page = await fixture(post('p', 'BLOCK 初始內容'));

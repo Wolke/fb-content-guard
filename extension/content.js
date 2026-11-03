@@ -1,6 +1,29 @@
 (() => {
   'use strict';
   const CANDIDATE = ':is([role="feed"], [role="main"]) :is([role="article"], [data-pagelet^="FeedUnit_"], div[aria-labelledby]:has([data-virtualized]))';
+  const SIDEBAR = '[data-pagelet="RightRail"], [data-pagelet^="RightRail_"], [data-pagelet*="Sponsored"], [role="complementary"]';
+  const SIDEBAR_CARD = `:is(${SIDEBAR}) a[href]:has(img,svg image,[role="img"])`;
+  function sidebarCards() {
+    const cards = [];
+    for (const link of document.querySelectorAll(SIDEBAR_CARD)) {
+      if (link.closest('[data-fg-ui]')) continue;
+      const rail = link.closest(SIDEBAR);
+      const knownRail = rail.hasAttribute('data-pagelet');
+      const sponsored = knownRail || [...rail.querySelectorAll('h2,h3,[role="heading"]')]
+        .some(h => /^(贊助|赞助|贊助內容|赞助内容|Sponsored)$/i.test(h.textContent.trim()));
+      let ad = false;
+      try {
+        const url = new URL(link.getAttribute('href'), location.href);
+        const facebook = url.hostname === 'facebook.com' || url.hostname.endsWith('.facebook.com');
+        ad = sponsored && ['http:', 'https:'].includes(url.protocol) &&
+          (!facebook || url.pathname === '/l.php' || url.pathname.startsWith('/ads/'));
+      } catch { /* Invalid or non-web links are not ad destinations. */ }
+      // Do not analyze profile links, friend requests or contact photos.
+      link.toggleAttribute('data-fg-sidebar-ignore', !ad);
+      if (ad) cards.push(link);
+    }
+    return cards;
+  }
   const debug = chrome.runtime.getManifest().version_name?.endsWith('-development') === true;
   document.documentElement?.setAttribute('data-fg-debug', String(debug));
   const records = new Map();
@@ -133,8 +156,8 @@
     };
     copy.querySelectorAll('img').forEach(img => { if (isEmoji(img)) img.replaceWith(document.createTextNode(img.alt)); });
     const text = copy.textContent.replace(/\s+/g, ' ').trim();
-    const identity = [...root.querySelectorAll('a[href]')].filter(a => !a.closest('[data-fg-ui]'))
-      .map(a => a.getAttribute('href')).filter(h => /\/posts\/|\/permalink\/|story_fbid=|\/photo/.test(h)).join('|');
+    const identity = [root, ...root.querySelectorAll('a[href]')].filter(a => !a.closest('[data-fg-ui]'))
+      .map(a => a.getAttribute('href')).filter(h => h && (root.matches(SIDEBAR_CARD) || /\/posts\/|\/permalink\/|story_fbid=|\/photo/.test(h))).join('|');
     let problem = '';
     if (root.querySelector('iframe,canvas')) problem = 'UNSUPPORTED_EMBED';
     if (root.querySelector('object:not([type="nested/pressable"]),object[data],embed')) problem ||= 'UNSUPPORTED_EMBED';
@@ -255,7 +278,7 @@
   function scan() {
     setActive();
     if (!active()) { for (const r of [...records.values()]) cleanup(r); return; }
-    const nodes = [...document.querySelectorAll(CANDIDATE)];
+    const nodes = [...new Set([...document.querySelectorAll(CANDIDATE), ...sidebarCards()])];
     const set = new Set(nodes);
     const roots = new Set();
     for (const node of nodes) {
@@ -371,7 +394,7 @@
   }
 
   const observer = new MutationObserver(mutations => {
-    let rescan = false;
+    let rescan = false, sidebarChanged = false;
     for (const m of mutations) {
       const element = m.target.nodeType === Node.ELEMENT_NODE ? m.target : m.target.parentElement;
       if (element?.closest('[data-fg-ui]')) continue;
@@ -380,9 +403,12 @@
       if (!active()) continue;
       // Shield known posts synchronously in the observer, before the next paint.
       for (const record of records.values()) if (record.root.contains(element)) inspect(record);
+      sidebarChanged ||= Boolean(element?.closest(SIDEBAR)) ||
+        [...m.addedNodes].some(n => n.nodeType === 1 && (n.matches(SIDEBAR) || n.querySelector(SIDEBAR)));
       rescan = true;
     }
-    if (rescan) schedule();
+    if (sidebarChanged) scan();
+    else if (rescan) schedule();
   });
   observer.observe(document, { subtree: true, childList: true, characterData: true, attributes: true,
     attributeFilter: ['src', 'srcset', 'href', 'style', 'role', 'data-pagelet', 'aria-labelledby', 'data-virtualized', 'alt', 'data', 'type', 'poster'] });
