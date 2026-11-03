@@ -46,6 +46,8 @@ async function state(page, id, value) {
 async function run(name, fn) {
   try { await fn(); passed++; console.log(`PASS ${name}`); }
   catch (error) {
+    const diagnostic = `${name}: ${error.stack || error}`.replaceAll('%', '%25').replaceAll('\r', '%0D').replaceAll('\n', '%0A');
+    console.error(`::error title=Browser scenario failure::${diagnostic}`);
     for (const page of context.pages()) console.log(await page.locator('[data-fg-ui]').evaluateAll(nodes => nodes.map(n => ({
       html: n.outerHTML, inert: n.inert, visibility: getComputedStyle(n).visibility, display: getComputedStyle(n).display,
       buttons: [...n.querySelectorAll('button')].map(b => ({ text: b.textContent, display: getComputedStyle(b).display, visibility: getComputedStyle(b).visibility, inert: b.inert }))
