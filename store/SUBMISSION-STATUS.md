@@ -4,6 +4,16 @@
 
 最後已驗證提交（2026-10-29）：0.2.1 正式版已提交審查，控制台顯示「待審查」與「你已將擴充功能提交審查」。核准後自動公開，既有公開版為 0.2.0。詳見 [0.2.1 更新紀錄](RELEASE-0.2.1.md) 與 [雲端版送審資料](LISTING-CLOUD.md)。
 
+2026-11-03 送審準備確認：
+
+- 0.2.3 與相關文件已合併並推送 main（4d2a5bd）。
+- [公開政策](https://wolke.github.io/fb-content-guard/privacy-cloud.html) 已確認包含右側廣告及排程說明；[Pages 部署](https://github.com/Wolke/fb-content-guard/actions/runs/41610166914) 成功。
+- [main 分支 CI](https://github.com/Wolke/fb-content-guard/actions/runs/41610167787) 的邏輯、Worker／D1、打包與瀏覽器測試全部成功。
+- 正式套件：dist/fb-content-guard-chrome-0.2.3.zip；SHA-256：c49ba269e677cf3ae1a733bcf63f148305e7364d771f4638bbad9b9a957162ab。已確認版本與來源一致、未含 development 標記。
+- 商品說明、單一用途、權限理由與審查操作說明在 LISTING-CLOUD.md；尚未填入商店控制台。
+- 使用者已授權送審，無須再次確認。阻礙是本回合沒有可控制 Chrome 的工具，並非等待使用者批准。商店開啟請求僅回覆 queued，不代表頁面已載入或完成登入。
+- **尚未上傳 0.2.3、尚未送出審查、尚未確認商店最新狀態。**
+
 以下保留 2026-10-04 的 0.1.0 歷史紀錄，並非目前狀態。
 
 - GitHub： https://github.com/Wolke/fb-content-guard （已公開）
