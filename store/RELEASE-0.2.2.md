@@ -14,4 +14,4 @@
 
 驗證：本機 17 項限流／背景／服務客戶端測試通過；[GitHub Actions](https://github.com/Wolke/fb-content-guard/actions/runs/41590560818) 的完整邏輯測試、Worker／D1 runtime、套件驗證及瀏覽器合成情境全部通過。正式版與開發版 ZIP 已產生，尚未安裝至使用者 Chrome。
 
-限制：後台仍保留全站每分鐘 15／每日 1,000、單一 IP 每日 200、匿名 session 每日 100 單位。圖片逐張計費額度，純文字至少一單位；排隊不會增加每日容量。GitHub CLI 登入失效（HTTP 401），目前僅透過 Git SSH 推送修正分支，尚未建立 PR 或合併 main。
+限制：後台仍保留全站每分鐘 15／每日 1,000、單一 IP 每日 200、匿名 session 每日 100 單位。圖片每張算一單位，純文字至少一單位；排隊不會增加每日容量。GitHub CLI 登入失效（HTTP 401），目前僅透過 Git SSH 推送修正分支，尚未建立 PR 或合併 main。
