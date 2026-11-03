@@ -120,7 +120,7 @@ try {
     assert.equal(await page.locator('#help').getAttribute('data-fg-state'),null);
     await page.locator('#ad').evaluate(e=>e.href='https://advertiser.test/changed');
     await page.waitForFunction(()=>window.calls.length===2); await state(page,'ad','allow');
-    await page.locator('#ad span').evaluate(e=>e.textContent='BLOCK 已替換廣告');
+    await page.locator('#ad > span').evaluate(e=>e.textContent='BLOCK 已替換廣告');
     await state(page,'ad','block'); assert.equal(await page.locator('#ad').isVisible(),false);
     assert.equal(await page.evaluate(()=>window.calls.length),3); await page.close();
   });
