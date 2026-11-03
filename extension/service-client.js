@@ -40,7 +40,8 @@ export function createServiceClient({ origin, fetchImpl = fetch, readSession, sa
     if (!response.ok) {
       if ([429, 503].includes(response.status)) cooldownUntil = Date.now() + 60000;
       const known = ['SESSION_REQUIRED', 'CONSENT_REQUIRED', 'USAGE_LIMIT', 'SERVICE_PAUSED',
-        'SERVICE_NOT_CONFIGURED', 'SERVICE_UNAVAILABLE', 'ANALYSIS_UNAVAILABLE', 'REQUEST_TOO_LARGE'];
+        'SERVICE_NOT_CONFIGURED', 'SERVICE_UNAVAILABLE', 'ANALYSIS_UNAVAILABLE', 'REQUEST_TOO_LARGE',
+        'SERVICE_COOLDOWN', 'PROVIDER_UNREACHABLE'];
       throw Error(known.includes(value?.error) ? value.error : 'SERVICE_UNAVAILABLE');
     }
     return value;

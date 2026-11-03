@@ -2,13 +2,13 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 let listener, changeListener;
 let cfg = { enabled: true, consentVersion: 'cloud-v1' };
-let session;
+let session, analysisBudget;
 const requests = [];
 const fb = { tab: { id: 1 }, url: 'https://www.facebook.com/' };
 const popup = { url: 'chrome-extension://test/popup.html' };
 globalThis.chrome = {
   storage: { local: { setAccessLevel: async () => {}, get: async () => ({ ...cfg }), remove: async () => {} },
-    session: { setAccessLevel: async () => {}, get: async () => ({ cloudSession: session }), set: async v => { session = v.cloudSession; } },
+    session: { setAccessLevel: async () => {}, get: async () => ({ cloudSession: session, analysisBudget }), set: async v => { if ('cloudSession' in v) session = v.cloudSession; if ('analysisBudget' in v) analysisBudget = v.analysisBudget; } },
     onChanged: { addListener: fn => { changeListener = fn; } } },
   runtime: { getURL: path => 'chrome-extension://test/' + path, onMessage: { addListener: fn => listener = fn } },
   tabs: { query: async () => [], sendMessage: async () => {} }
@@ -55,6 +55,15 @@ test('an unsupported image prevents text-only classification', async () => {
   requests.length = 0;
   assert.equal((await send({ type: 'MODERATE', payload: { text: 'post', images: ['https://evil.test/two'] } })).error, 'UNSUPPORTED_IMAGE');
   assert.equal(requests.some(r => r.url.endsWith('/moderate')), false);
+});
+test('shared budget defers surplus posts before downloading their images', async () => {
+  const first = await send({type:'MODERATE',payload:{text:'many pictures',images:Array.from({length:12},(_,i)=>`https://s.fbcdn.net/budget-${i}`)}});
+  assert.equal(first.decision, 'allow');
+  requests.length = 0;
+  const second = await send({type:'MODERATE',payload:{text:'wait',images:['https://s.fbcdn.net/later-a','https://s.fbcdn.net/later-b']}});
+  assert.equal(second.error, 'WAITING_CAPACITY');
+  assert.ok(second.retryAfterMs > 0);
+  assert.equal(requests.length, 0);
 });
 test('withdrawing consent clears the anonymous session and blocks subsequent uploads', async () => {
   assert.ok(session);

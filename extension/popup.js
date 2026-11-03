@@ -28,8 +28,17 @@ $('health').addEventListener('click', async () => {
 try {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   const s = await chrome.tabs.sendMessage(tab.id, { type: 'STATUS' });
+  const reasons = {
+    UNSUPPORTED_IMAGE: '圖片來源／格式不支援', UNSUPPORTED_VECTOR: '向量圖片無法轉換',
+    UNSUPPORTED_ROLE_IMAGE: '圖片缺少來源', UNSUPPORTED_EMBED: '嵌入內容不支援',
+    TOO_MANY_IMAGES: '圖片超過 12 張', IMAGE_FETCH_FAILED: '圖片下載失敗',
+    IMAGE_TOO_LARGE: '單張圖片過大', IMAGES_TOO_LARGE: '圖片總量過大',
+    LONG_TEXT: '文字過長', ANIMATED_IMAGE: '動態圖片不支援', ANALYSIS_UNAVAILABLE: '雲端分析未完成'
+  };
+  const details = Object.entries(s.errorReasons || {}).map(([code, count]) => `${reasons[code] || '其他分析錯誤'}：${count}`).join('；');
   $('stats').textContent = !s.supported ? '目前頁面不在支援範圍，請開啟 www.facebook.com 首頁。' :
     !s.enabled ? '遮擋已關閉。' :
-    `目前辨識 ${s.total} 則 · 遮擋 ${s.blocked} · 待檢查 ${s.pending} · 無法檢查 ${s.errors}` +
-    (s.total === 0 ? '\n尚未找到貼文；可能正在載入，或 FB 版面需要適配。' : '');
+    `目前辨識 ${s.total} 則 · 遮擋 ${s.blocked} · 檢查中 ${s.pending} · 等待額度 ${s.waiting || 0} · 等待內容 ${s.loading || 0} · 無法讀取 ${s.errors}` +
+    (s.total === 0 ? '\n尚未找到貼文；可能正在載入，或 FB 版面需要適配。' : '') +
+    (s.waiting ? '\n依額度自動排隊；反覆刷新不會增加可用額度。' : '') + (details ? '\n' + details : '');
 } catch { $('stats').textContent = '請開啟或重新整理 FB 首頁，讓擴充功能開始運作。'; }

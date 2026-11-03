@@ -63,3 +63,8 @@ test('clearing consent cannot let an in-flight bootstrap restore the session', a
   await rejected;
   assert.equal(stored, null);
 });
+
+test('provider cooldown codes survive client translation', async () => {
+  const { client } = fixture(() => Response.json({error:'SERVICE_COOLDOWN'}, {status:429}));
+  await assert.rejects(client.moderate({text:'x',images:[]},opts()), /SERVICE_COOLDOWN/);
+});

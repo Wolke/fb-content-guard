@@ -24,7 +24,7 @@ if not options.development and (not valid or origin + '/*' not in manifest['host
 if config.get('consentVersion') != 'cloud-v1':
     raise SystemExit('Cloud consent version is missing.')
 files = {'manifest.json', 'background.js', 'net.js', 'service-client.js', 'cloud-config.json',
-         'content.js', 'content.css', 'popup.html', 'popup.js', 'popup.css', *manifest['icons'].values()}
+         'analysis-budget.js', 'content.js', 'content.css', 'popup.html', 'popup.js', 'popup.css', *manifest['icons'].values()}
 for name in files:
     if not (extension / name).is_file():
         raise SystemExit(f'Missing extension file: {name}')

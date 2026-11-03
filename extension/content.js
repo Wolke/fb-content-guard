@@ -5,7 +5,7 @@
   document.documentElement?.setAttribute('data-fg-debug', String(debug));
   const records = new Map();
   const cache = new Map();
-  let enabled = true, consent = false, configured = false, running = 0, timer, url = location.href;
+  let enabled = true, consent = false, configured = false, running = 0, timer, wakeTimer, serviceReadyAt = 0, url = location.href;
   const supported = () => location.hostname === 'www.facebook.com' && ['/', '/home.php'].includes(location.pathname);
   const active = () => enabled && supported();
   const setActive = () => document.documentElement?.setAttribute('data-fg-active', String(active()));
@@ -186,11 +186,11 @@
   }
 
   function render(record, state, error = '') {
-    record.state = state;
+    record.state = state; record.error = error;
     record.root.setAttribute('data-fg-state', state);
-    const names = { pending: '正在檢查貼文', block: '已隱藏：疑似色情', error: '這則貼文尚未通過檢查' };
+    const names = { waiting: '等待分析', pending: '正在檢查貼文', block: '已隱藏：疑似色情', error: '這則貼文尚未通過檢查' };
     record.title.textContent = names[state] || '';
-    record.detail.textContent = state === 'pending' ? '先遮住內容，完成檢查後再顯示。' :
+    record.detail.textContent = state === 'waiting' ? (['EMPTY_CONTENT', 'INCOMPLETE_IMAGES', 'VIDEO_PREVIEW_UNAVAILABLE'].includes(error) ? '等待貼文內容載入；載入後會自動檢查。' : '依服務額度排隊，稍後會自動重試。') : state === 'pending' ? '先遮住內容，完成檢查後再顯示。' :
       state === 'block' ? '由 OpenAI 色情內容分類判定；你可以選擇顯示。' : (ERRORS[error] || '檢查未完成，請稍後重試或手動顯示。');
     record.retry.hidden = state !== 'error';
     // inert prevents focus/keyboard interaction with invisible original content.
@@ -298,7 +298,7 @@
       let decision = cache.get(key);
       if (!decision) {
         const result = await chrome.runtime.sendMessage({ type: 'MODERATE', payload });
-        if (!result?.ok) throw new Error(result?.error || 'UNKNOWN_ERROR');
+        if (!result?.ok) throw Object.assign(new Error(result?.error || 'UNKNOWN_ERROR'), { retryAfterMs: result?.retryAfterMs });
         if (!['allow', 'block'].includes(result.decision)) throw new Error('INVALID_RESPONSE');
         decision = result.decision; remember(key, decision);
       }
@@ -307,7 +307,18 @@
       if (snapshot(record.root).signature !== sig) { inspect(record); return; }
       render(record, decision);
     } catch (error) {
-      if (current()) render(record, 'error', error.message);
+      if (current()) {
+        if (['WAITING_CAPACITY', 'BUSY', 'USAGE_LIMIT', 'SERVICE_COOLDOWN', 'SERVICE_UNREACHABLE', 'SERVICE_UNAVAILABLE', 'PROVIDER_UNREACHABLE', 'SESSION_REQUIRED'].includes(error.message)) {
+          const fallback = error.message === 'BUSY' ? 2000 : 65000;
+          const delay = Number.isFinite(error.retryAfterMs) ? Math.max(1000, Math.min(1800000, error.retryAfterMs)) : fallback;
+          record.readyAt = Date.now() + delay;
+          serviceReadyAt = Math.max(serviceReadyAt, record.readyAt);
+          render(record, 'waiting', error.message);
+        } else if (['EMPTY_CONTENT', 'INCOMPLETE_IMAGES', 'VIDEO_PREVIEW_UNAVAILABLE'].includes(error.message)) {
+          record.readyAt = Infinity;
+          render(record, 'waiting', error.message);
+        } else render(record, 'error', error.message);
+      }
     } finally {
       running--; if (record.checking === version) record.checking = undefined;
       schedule();
@@ -319,7 +330,7 @@
     // the preceding visible sibling so hidden posts far below the fold wait.
     let previous = record.root.previousElementSibling;
     while (previous) {
-      if (previous.getAttribute('data-fg-state') === 'pending') {
+      if (['pending', 'waiting'].includes(previous.getAttribute('data-fg-state'))) {
         const top = record.initialTop - scrollY;
         return { top, bottom: top };
       }
@@ -331,16 +342,21 @@
     return { top: rect.top, bottom: rect.top };
   }
   function pump() {
+    clearTimeout(wakeTimer);
     if (!active()) return;
-    const queued = [...records.values()].filter(r => r.state === 'pending' && r.checking === undefined)
+    const queued = [...records.values()].filter(r => ['pending', 'waiting'].includes(r.state) && Number.isFinite(r.readyAt) && r.checking === undefined)
       .map(r => ({ r, rect: queueRect(r) }))
       .filter(({ rect }) => rect.bottom >= -200 && rect.top <= innerHeight + 1200)
       .sort((a, b) => Math.abs(a.rect.top) - Math.abs(b.rect.top));
+    let wakeAt = Infinity;
     for (const { r } of queued) {
       if (running >= 2) break;
-      if (Date.now() < r.readyAt) { setTimeout(pump, Math.max(10, r.readyAt - Date.now())); continue; }
+      const next = Math.max(r.readyAt, serviceReadyAt);
+      if (Date.now() < next) { wakeAt = Math.min(wakeAt, next); continue; }
+      render(r, 'pending');
       void check(r);
     }
+    if (Number.isFinite(wakeAt)) wakeTimer = setTimeout(pump, Math.max(10, wakeAt - Date.now()));
   }
   async function configure() {
     try {
@@ -399,9 +415,15 @@
     if (m.type === 'CONFIG_CHANGED') { void configure(); return; }
     if (m.type === 'STATUS') {
       const list = [...records.values()];
+      const queued = r => (r.state === 'waiting' && Number.isFinite(r.readyAt)) || (r.state === 'pending' && serviceReadyAt > Date.now());
+      const errorReasons = {};
+      for (const r of list) if (r.state === 'error') errorReasons[r.error] = (errorReasons[r.error] || 0) + 1;
       reply({ supported: supported(), enabled, total: list.length,
         blocked: list.filter(r => r.state === 'block').length,
-        pending: list.filter(r => r.state === 'pending').length,
+        pending: list.filter(r => r.state === 'pending' && !queued(r)).length,
+        waiting: list.filter(queued).length,
+        loading: list.filter(r => r.state === 'waiting' && !Number.isFinite(r.readyAt)).length,
+        errorReasons,
         errors: list.filter(r => r.state === 'error').length });
     }
   });

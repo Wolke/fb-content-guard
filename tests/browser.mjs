@@ -24,7 +24,8 @@ async function fixture(html, config = {}) {
         window.calls.push(message.payload);
         if(message.payload.text.includes('HOLD')) return new Promise(resolve => window.releaseHeld = resolve);
         await new Promise(resolve => setTimeout(resolve, 120));
-        if(message.payload.text.includes('FAIL')) return {ok:false,error:'USAGE_LIMIT'};
+        if(message.payload.text.includes('THROTTLE') && window.calls.filter(p=>p.text.includes('THROTTLE')).length === 1) return {ok:false,error:'USAGE_LIMIT',retryAfterMs:1000};
+        if(message.payload.text.includes('FAIL')) return {ok:false,error:'ANALYSIS_UNAVAILABLE'};
         return {ok:true,decision:message.payload.text.includes('BLOCK')?'block':'allow'};
       }
     }};
@@ -107,6 +108,26 @@ try {
     assert.equal(await page.locator('#p .original').evaluate(e => getComputedStyle(e).display), 'none');
     await page.close();
   });
+  await run('quota cooldown queues silently and retries automatically without reload', async () => {
+    const page = await fixture(post('p', 'THROTTLE 一般貼文'), {debug:false});
+    await state(page, 'p', 'waiting');
+    const status = await page.evaluate(() => new Promise(resolve => window.handlers.forEach(fn => fn({type:'STATUS'}, {}, resolve))));
+    assert.equal(status.waiting, 1); assert.equal(status.errors, 0);
+    assert.equal(await page.locator('#p').isVisible(), false);
+    await state(page, 'p', 'allow');
+    assert.equal(await page.evaluate(() => window.calls.length), 2);
+    await page.close();
+  });
+  await run('empty content waits without network polling and checks when content arrives', async () => {
+    const page = await fixture('<div role="article" id="p"><div class="original"></div></div>', {debug:false});
+    await state(page, 'p', 'waiting');
+    const status = await page.evaluate(() => new Promise(resolve => window.handlers.forEach(fn => fn({type:'STATUS'}, {}, resolve))));
+    assert.equal(status.loading, 1); assert.equal(status.errors, 0);
+    assert.equal(await page.evaluate(() => window.calls.length), 0);
+    await page.locator('#p .original').evaluate(e => e.textContent = '現在載入的一般文字');
+    await state(page, 'p', 'allow');
+    await page.close();
+  });
   await run('provider failure stays shielded, retry runs again', async () => {
     const page = await fixture(post('p', 'FAIL 模擬連線錯誤'));
     await state(page, 'p', 'error');
@@ -186,7 +207,7 @@ try {
   });
   await run('unreadable video remains shielded while collapsed text can be checked', async () => {
     const page = await fixture(post('video', '影片', '<video></video>') + post('partial', '截斷文字', '<button>查看更多</button>'));
-    await state(page, 'video', 'error'); await state(page, 'partial', 'allow');
+    await state(page, 'video', 'waiting'); await state(page, 'partial', 'allow');
     assert.equal(await page.evaluate(() => window.calls.length), 1); await page.close();
   });
   await run('collapsed text and photo previews pass; expanded content is checked again', async () => {
@@ -225,7 +246,7 @@ try {
   });
   await run('late video poster retries automatically; Reels links alone do not block a static preview', async () => {
     const page = await fixture(post('video', 'NORMAL', '<video></video>') + post('link', 'NORMAL', '<a href="/reel/123">Reel</a><img src="https://s.fbcdn.net/reel.png">'));
-    await state(page, 'video', 'error'); await state(page, 'link', 'allow');
+    await state(page, 'video', 'waiting'); await state(page, 'link', 'allow');
     await page.locator('video').evaluate(e => e.poster = 'https://s.fbcdn.net/late.png');
     await state(page, 'video', 'allow');
     assert.equal(await page.evaluate(() => window.calls.length), 2);
@@ -233,7 +254,7 @@ try {
   });
   await run('a readable video frame is frozen and analysed once', async () => {
     const page = await fixture(post('p', 'NORMAL', '<video muted></video>'));
-    await state(page, 'p', 'error');
+    await state(page, 'p', 'waiting');
     await page.evaluate(() => {
       const canvas = document.createElement('canvas'); canvas.width = 40; canvas.height = 30;
       const ctx = canvas.getContext('2d'); ctx.fillStyle = 'green'; ctx.fillRect(0, 0, 40, 30);
@@ -251,7 +272,7 @@ try {
   });
   await run('an unreadable video frame stays shielded without a text-only request', async () => {
     const page = await fixture(post('p', 'NORMAL', '<video muted></video>'));
-    await state(page, 'p', 'error');
+    await state(page, 'p', 'waiting');
     await page.evaluate(() => {
       const canvas = document.createElement('canvas'); canvas.width = 40; canvas.height = 30;
       canvas.getContext('2d').fillRect(0, 0, 40, 30);
@@ -260,7 +281,7 @@ try {
       const video = document.querySelector('video'); video.srcObject = canvas.captureStream(1);
     });
     await page.waitForFunction(() => document.querySelector('video').readyState >= 2);
-    await state(page, 'p', 'error');
+    await state(page, 'p', 'waiting');
     assert.equal(await page.evaluate(() => window.calls.length), 0);
     assert.equal(await page.locator('video').evaluate(e => getComputedStyle(e).display), 'none');
     await page.close();
@@ -270,7 +291,7 @@ try {
     await page.waitForFunction(() => Boolean(window.releaseHeld));
     await page.locator('video').evaluate(e => e.removeAttribute('poster'));
     await page.evaluate(() => window.releaseHeld({ ok: true, decision: 'allow' }));
-    await state(page, 'p', 'error'); await state(page, 'embed', 'error');
+    await state(page, 'p', 'waiting'); await state(page, 'embed', 'error');
     assert.equal(await page.locator('[data-fg-ui="video"]').isVisible(), false);
     assert.equal(await page.evaluate(() => window.calls.length), 1);
     await page.close();
@@ -279,7 +300,7 @@ try {
     const page = await fixture(post('broken', '圖片', '<img src="https://s.fbcdn.net/missing.png">') + '<div role="article" id="empty"><div></div></div>');
     // Replace a previously loaded source with a deliberately invalid local data image.
     await page.locator('#broken img').evaluate(img => img.src = 'data:image/png;base64,invalid');
-    await state(page, 'broken', 'error'); await state(page, 'empty', 'error');
+    await state(page, 'broken', 'waiting'); await state(page, 'empty', 'waiting');
     assert.equal(await page.evaluate(() => window.calls.length), 0); await page.close();
   });
   await run('SPA navigation outside homepage restores content', async () => {

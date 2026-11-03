@@ -1,8 +1,13 @@
+import { createAnalysisBudget } from './analysis-budget.js';
 import { cloudImageDataUrl } from './net.js';
 import { CONSENT_VERSION, createServiceClient, validServiceOrigin } from './service-client.js';
 
 const DEFAULTS = { enabled: true, consentVersion: '' };
 const active = new Set();
+const budget = createAnalysisBudget({
+  read: async () => (await chrome.storage.session.get('analysisBudget')).analysisBudget,
+  write: analysisBudget => chrome.storage.session.set({ analysisBudget })
+});
 const ready = (async () => {
   await chrome.storage.local.setAccessLevel({ accessLevel: 'TRUSTED_CONTEXTS' });
   await chrome.storage.session.setAccessLevel({ accessLevel: 'TRUSTED_CONTEXTS' });
@@ -35,10 +40,13 @@ async function handle(message, sender) {
   if (message.type !== 'MODERATE' || !isFacebook(sender)) throw Error('FORBIDDEN');
   await checkConsent();
   if (!configured) throw Error('SERVICE_NOT_CONFIGURED');
-  if (active.size >= 2) throw Error('BUSY');
+  if (active.size >= 2) throw Object.assign(Error('BUSY'), { retryAfterMs: 2000 });
   const p = message.payload;
   if (!p || typeof p.text !== 'string' || p.text.length > 16000 || !Array.isArray(p.images) || p.images.length > 12 ||
       p.images.some(x => typeof x !== 'string')) throw Error('INVALID_CONTENT');
+  const units = Math.max(1, p.images.length);
+  await budget.check(units);
+  if (active.size >= 2) throw Object.assign(Error('BUSY'), { retryAfterMs: 2000 });
   const controller = new AbortController();
   active.add(controller);
   try {
@@ -52,12 +60,23 @@ async function handle(message, sender) {
       if (size > 512 * 1024) throw Error('IMAGES_TOO_LARGE');
     }
     await checkConsent();
-    return await client.moderate({ text: p.text, images }, { signal: controller.signal, checkConsent });
+    await budget.reserve(units);
+    try {
+      const result = await client.moderate({ text: p.text, images }, { signal: controller.signal, checkConsent });
+      await budget.success();
+      return result;
+    } catch (error) {
+      if (['USAGE_LIMIT', 'SERVICE_COOLDOWN', 'SERVICE_UNREACHABLE', 'SERVICE_UNAVAILABLE', 'PROVIDER_UNREACHABLE'].includes(error.message)) {
+        error.retryAfterMs = await budget.pause();
+      }
+      throw error;
+    }
   } finally { active.delete(controller); }
 }
 chrome.runtime.onMessage.addListener((message, sender, reply) => {
   handle(message, sender).then(result => reply({ ok: true, ...result }))
-    .catch(error => reply({ ok: false, error: error.message || 'UNKNOWN_ERROR' }));
+    .catch(error => reply({ ok: false, error: error.message || 'UNKNOWN_ERROR',
+      ...(Number.isFinite(error.retryAfterMs) ? { retryAfterMs: error.retryAfterMs } : {}) }));
   return true;
 });
 chrome.storage.onChanged.addListener(async (changes, area) => {
