@@ -9,7 +9,7 @@
     "48": "icons/icon48.png",
     "128": "icons/icon128.png"
   },
-  "description": "先遮住 FB 首頁貼文，同意後交由雲端服務與 OpenAI 檢查色情內容。免登入，支援文字與靜態圖片。",
+  "description": "先遮住 FB 首頁貼文與右側贊助廣告，同意後交由雲端服務與 OpenAI 檢查色情內容。免登入，支援文字與靜態圖片。",
   "permissions": [
     "storage"
   ],
