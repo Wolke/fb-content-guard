@@ -426,7 +426,7 @@ try {
         tabs: { query: async () => [{ id: 1 }], sendMessage: async () => ({ supported: true, enabled: true, total: 3, blocked: 1, pending: 1, errors: 1 }) }
       };
     });
-    for (const file of ['popup.html', 'popup.js', 'popup.css', 'service-client.js']) {
+    for (const file of ['popup.html', 'popup.js', 'popup.css', 'service-client.js', 'diagnostic-log.js']) {
       const body = await readFile(new URL('../extension/' + file, import.meta.url), 'utf8');
       await page.route('https://extension.test/' + file, route => route.fulfill({ contentType: file.endsWith('.js') ? 'text/javascript; charset=utf-8' : file.endsWith('.css') ? 'text/css' : 'text/html; charset=utf-8', body }));
     }
