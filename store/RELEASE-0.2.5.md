@@ -1,6 +1,6 @@
 # 0.2.5 — API 呼叫與判定診斷
 
-狀態：開發及驗證中；0.2.4 已提交審查，0.2.5 尚未上傳或送審。
+狀態：程式、正式與開發 ZIP、完整 CI、雲端診斷部署及公開政策已完成。0.2.4 已提交審查，0.2.5 尚未上傳或送審。
 
 ## 使用方式
 
@@ -24,4 +24,14 @@
 
 - 57 項程式測試通過，包含診斷權限、資料白名單、600 筆上限、過期、重新啟動、清除後延遲回覆、未就緒不送雲端、舊後台不誤報與 provider 分數。
 - workerd 與 D1 runtime 通過，驗證真實編譯後 Worker 的診斷回傳和六個並行請求的原子額度。
-- 完整瀏覽器 CI 與 UI 視覺檢查待完成；尚未在使用者實際安裝的 0.2.5 完成驗收。
+- [完整 CI](https://github.com/Wolke/fb-content-guard/actions/runs/41804513887) 成功：57 項程式、34 個瀏覽器情境與 Worker/D1；程式版本 9dfac053d869aea47c4e3f126f368f09f2671a83。
+- 已檢視 CI 的診斷頁截圖；測試含展開逐則時間線、篩選、清除、開關，合成資料只用於測試。使用者 Chrome 當時離線，沒有宣稱真實安裝 0.2.5 已驗收。
+- 正式 Worker 已更新為 0.2.5，部署版本 b41935cb-b4aa-4030-b0b9-db3f15c5c7d5；舊部署版本 1b457ce3-d684-4bc7-8d4c-a2b3006b9d16。維持原有免費方案、秘密、D1、每日 1000／每分鐘 15 的全站上限。
+- 實際以合成安全文字呼叫後台：diagnostics=true 收到 HTTP 200、allow、sexual=false、sexualScore=0.0000018342893327886845、OpenAI 596ms；沒有診斷旗標的請求仍只回傳 {decision:allow}。只驗證傳輸與格式，不作準確率保證，未使用私人貼文。
+- 公開政策已與來源逐位元一致，SHA-256 285f66f4ff2f9d5dd514fe53b47796cd060b67a4bc05d31c7b0e953efced6684。
+- 正式與開發 ZIP 已確認所有新模組與來源相同，沒有改變 Chrome 權限。
+
+
+- `dist/fb-content-guard-chrome-0.2.5.zip`：SHA-256 `9af8c77bb2534f52789b5d32d9a59c621b55f623d6f55405a97cfd3301c96462`。
+
+- `dist/fb-content-guard-chrome-0.2.5-development.zip`：SHA-256 `e0b75eddd8392c29902c6015860534a36ebfb6145e6d094373502bb4ff7ec4b5`。
