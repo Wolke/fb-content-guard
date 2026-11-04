@@ -105,18 +105,19 @@ export function createCloudHandler({ apiKey, extensionId, verifySession, reserve
     }
     try {
       // Must be literal true. Exceptions or unexpected adapter results fail closed.
-      if (await reserveQuota(session.subject, Math.max(1, payload.images.length)) !== true) return send(429, { error: 'USAGE_LIMIT' });
+      if (await reserveQuota(session.subject, Math.max(1, payload.images.length)) !== true) return send(429, { error: 'USAGE_LIMIT', ...(payload.diagnostics ? { diagnostics: { version: 1, providerAttempted: false, events: [] } } : {}) });
     } catch { return send(503, { error: 'SERVICE_UNAVAILABLE' }); }
     try {
       const result = await moderateImpl(payload, apiKey);
       if (!['allow', 'block'].includes(result?.decision)) throw new Error('INVALID_RESULT');
-      return send(200, { decision: result.decision });
+      return send(200, { decision: result.decision, ...(payload.diagnostics && result.diagnostics ? { diagnostics: result.diagnostics } : {}) });
     } catch (error) {
+      const details = payload.diagnostics && error?.diagnostics ? { diagnostics: error.diagnostics } : {};
       // Only fixed internal codes; never expose provider bodies or submitted content.
-      if (error instanceof ServiceError && error.code === 'PROVIDER_RATE_LIMIT') return send(429, { error: 'SERVICE_COOLDOWN' });
-      if (error instanceof ServiceError && error.code === 'PROVIDER_UNREACHABLE') return send(503, { error: 'PROVIDER_UNREACHABLE' });
+      if (error instanceof ServiceError && error.code === 'PROVIDER_RATE_LIMIT') return send(429, { error: 'SERVICE_COOLDOWN', ...details });
+      if (error instanceof ServiceError && error.code === 'PROVIDER_UNREACHABLE') return send(503, { error: 'PROVIDER_UNREACHABLE', ...details });
       const reason = error instanceof ServiceError ? ({ PROVIDER_BAD_REQUEST: 'provider_input_rejected', INVALID_PROVIDER_RESPONSE: 'provider_response_invalid', PROVIDER_ERROR: 'provider_failed', API_KEY_INVALID: 'provider_configuration' })[error.code] : undefined;
-      return send(503, { error: 'ANALYSIS_UNAVAILABLE', ...(reason ? { reason } : {}) });
+      return send(503, { error: 'ANALYSIS_UNAVAILABLE', ...details, ...(reason ? { reason } : {}) });
     }
   };
 }

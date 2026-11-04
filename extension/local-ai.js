@@ -1,7 +1,7 @@
 import { MODEL_OPTIONS, classifyLocalImages } from './local-model.js';
 import { CONSENT_VERSION } from './service-client.js';
 const $ = id => document.getElementById(id);
-let session, port, job, heartbeat, completed = 0;
+let session, port, job, heartbeat, completed = 0, incomplete = 0;
 const status = text => { $('status').textContent = text; };
 function connect() {
   port = chrome.runtime.connect({ name: 'local-model' });
@@ -20,14 +20,18 @@ function connect() {
       const cfg = await chrome.storage.local.get({ enabled: true, consentVersion: '', localImageCheck: false });
       if (!cfg.enabled || cfg.consentVersion !== CONSENT_VERSION || !cfg.localImageCheck) throw Error('LOCAL_CANCELLED');
       status('正在本機檢查圖片；Facebook 上的內容保持隱藏。');
-      const result = await classifyLocalImages(session, message.images, { signal: controller.signal });
+      const result = await classifyLocalImages(session, message.images, { signal: controller.signal, onEvent: event => { try { port.postMessage({ type: 'EVENT', id: message.id, event }); } catch {} } });
       controller.signal.throwIfAborted();
       port.postMessage({ type: 'RESULT', id: message.id, ok: true, ...result });
-      completed++; $('stats').textContent = `本次完成 ${completed} 則（不保存圖片或文案）`;
+      completed++; $('stats').textContent = `本次判定完成 ${completed} 則 · 未完成 ${incomplete} 則（不保存圖片或文案）`;
       status('模型已就緒，等候下一則圖片。');
     } catch (error) {
       try { port.postMessage({ type: 'RESULT', id: message.id, ok: false, error: error.message }); } catch {}
-      status('這次檢查未完成，內容保持隱藏。模型可接續處理其他貼文。');
+      incomplete++;
+      const known = ['LOCAL_UNCERTAIN', 'LOCAL_INVALID_RESPONSE', 'LOCAL_CONTEXT_OVERFLOW', 'LOCAL_TIMEOUT', 'LOCAL_CANCELLED', 'INVALID_CONTENT'];
+      const code = known.includes(error.message) ? error.message : 'LOCAL_FAILED';
+      $('stats').textContent = `本次判定完成 ${completed} 則 · 未完成 ${incomplete} 則（不保存圖片或文案）`;
+      status(`這次檢查未完成（${code}），內容保持隱藏。可在「查看 API 與判定紀錄」啟用診斷後查看後續明細。`);
     } finally { clearTimeout(timer); if (job === current) job = undefined; }
   });
   port.postMessage({ type: 'READY' });

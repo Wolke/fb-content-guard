@@ -19,11 +19,12 @@ export function parseLocalDecision(raw) {
   throw Error('LOCAL_INVALID_RESPONSE');
 }
 
-export async function classifyLocalImages(session, images, { signal } = {}) {
+export async function classifyLocalImages(session, images, { signal, onEvent = () => {} } = {}) {
   if (!Array.isArray(images) || images.length < 1 || images.length > 12 ||
       images.some(x => typeof x !== 'string' || x.length > 180000 || !/^data:image\/jpeg;base64,[A-Za-z0-9+/]+=*$/.test(x)) ||
       images.reduce((n, x) => n + x.length, 0) > 720000) throw Error('INVALID_CONTENT');
-  for (const data of images) {
+  for (const [index, data] of images.entries()) {
+    const started = Date.now();
     signal?.throwIfAborted();
     const bytes = Uint8Array.from(atob(data.split(',')[1]), c => c.charCodeAt(0));
     let work, overflow = false;
@@ -36,7 +37,12 @@ export async function classifyLocalImages(session, images, { signal } = {}) {
       ] }], { signal, responseConstraint: { type: 'string', enum: ['BLOCK', 'ALLOW', 'UNCERTAIN'] } });
       signal?.throwIfAborted();
       if (overflow) throw Error('LOCAL_CONTEXT_OVERFLOW');
-      if (parseLocalDecision(raw) === 'block') return { decision: 'block' };
+      const decision = parseLocalDecision(raw);
+      onEvent({ image: index + 1, outcome: decision, ms: Date.now() - started });
+      if (decision === 'block') return { decision: 'block' };
+    } catch (error) {
+      onEvent({ image: index + 1, outcome: error.message === 'LOCAL_UNCERTAIN' ? 'uncertain' : 'error', error: error.message, ms: Date.now() - started });
+      throw error;
     } finally { work?.destroy(); }
   }
   return { decision: 'allow' };

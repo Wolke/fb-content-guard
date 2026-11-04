@@ -2,7 +2,7 @@ import { createCloudHandler } from './handler.mjs';
 import { ipIdentity, issueSession, verifySession } from './security.mjs';
 import { reserveQuota } from './quota.mjs';
 
-export const VERSION = '0.2.0';
+export const VERSION = '0.2.5';
 export const CONSENT_VERSION = 'cloud-v1';
 const MAX_BODY = 800 * 1024;
 async function emptyBody(request) {

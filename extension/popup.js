@@ -49,7 +49,20 @@ try {
   const details = Object.entries(s.errorReasons || {}).map(([code, count]) => `${reasons[code] || '其他分析錯誤'}：${count}`).join('；');
   $('stats').textContent = !s.supported ? '目前頁面不在支援範圍，請開啟 www.facebook.com 首頁。' :
     !s.enabled ? '遮擋已關閉。' :
-    `目前辨識 ${s.total} 則 · 遮擋 ${s.blocked} · 檢查中 ${s.pending} · 等待額度 ${s.waiting || 0} · 等待內容 ${s.loading || 0} · 無法讀取 ${s.errors}` +
+    `目前辨識 ${s.total} 則 · 判定阻擋 ${s.blocked} · 檢查中 ${s.pending} · 等待額度 ${s.waiting || 0} · 等待內容 ${s.loading || 0} · 檢查未完成 ${s.errors}` +
     (s.total === 0 ? '\n尚未找到貼文；可能正在載入，或 FB 版面需要適配。' : '') +
     (s.waiting ? '\n依額度自動排隊；反覆刷新不會增加可用額度。' : '') + (details ? '\n' + details : '');
 } catch { $('stats').textContent = '請開啟或重新整理 FB 首頁，讓擴充功能開始運作。'; }
+
+$('openDiagnostics').addEventListener('click', async () => {
+  const url = chrome.runtime.getURL('diagnostics.html');
+  const contexts = await chrome.runtime.getContexts({ contextTypes: ['TAB'], documentUrls: [url] });
+  if (contexts.length) await chrome.tabs.update(contexts[0].tabId, { active: true });
+  else await chrome.tabs.create({ url });
+});
+try {
+  const r = await chrome.runtime.sendMessage({ type: 'DIAGNOSTICS_STATUS' });
+  if (r.ok) $('modelStatus').textContent = cfg.localImageCheck
+    ? (r.modelReady ? '本機模型已連線。' : '加強圖片檢查已開啟，但模型未連線：圖片貼文會保持隱藏，且不會送出雲端分類。請先啟用本機模型。')
+    : '加強圖片檢查未開啟，使用雲端分類。';
+} catch {}

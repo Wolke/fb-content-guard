@@ -28,7 +28,10 @@ globalThis.fetch = async (url, init) => {
 await import('../extension/background.js');
 const send = (message, sender = fb) => new Promise(resolve => listener(message, sender, resolve));
 test('content configuration exposes neither anonymous token nor old pairing secret', async () => {
-  assert.deepEqual(await send({ type: 'CONFIG' }), { ok: true, enabled: true, consent: true, configured: true, localImageCheck: false });
+  const result = await send({ type: 'CONFIG' });
+  assert.equal(result.diagnostics.enabled, false);
+  const { diagnostics, ...rest } = result;
+  assert.deepEqual(rest, { ok: true, enabled: true, consent: true, configured: true, localImageCheck: false });
 });
 test('only Facebook content scripts can submit moderation', async () => {
   const payload = { text: 'normal', images: [] };
@@ -96,4 +99,24 @@ test('experimental image check gates a cloud allow and never uploads when model 
   assert.equal((await send({ type: 'MODERATE', payload })).error, 'LOCAL_NOT_READY');
   // Text-only posts retain the original cloud workflow.
   assert.equal((await send({ type: 'MODERATE', payload: { text: 'text', images: [] } })).decision, 'allow');
+});
+
+test('diagnostic controls are restricted and missing model records no cloud request or secrets', async () => {
+  const diag = { id: 'test', url: 'chrome-extension://test/diagnostics.html', tab: { id: 5 } };
+  assert.equal((await send({ type: 'DIAGNOSTICS_STATUS' })).error, 'FORBIDDEN');
+  assert.equal((await send({ type: 'DIAGNOSTICS_ENABLE', enabled: true }, popup)).error, 'FORBIDDEN');
+  assert.equal((await send({ type: 'DIAGNOSTICS_ENABLE', enabled: true }, { ...diag, id: 'foreign' })).error, 'FORBIDDEN');
+  const config = await send({ type: 'DIAGNOSTICS_ENABLE', enabled: true }, diag);
+  const trace = { epoch: config.epoch, id: crypto.randomUUID(), page: crypto.randomUUID(), post: 1 };
+  cfg = { enabled: true, consentVersion: 'cloud-v1', localImageCheck: true };
+  requests.length = 0;
+  const result = await send({ type: 'MODERATE', trace, payload: { text: 'private text', images: ['https://s.fbcdn.net/private.jpg'] } });
+  assert.equal(result.error, 'LOCAL_NOT_READY'); assert.equal(requests.length, 0);
+  const status = await send({ type: 'DIAGNOSTICS_STATUS' }, diag);
+  assert.ok(status.events.some(e => e.error === 'LOCAL_NOT_READY'));
+  assert.equal(status.events.some(e => e.stage === 'cloud'), false);
+  assert.equal(JSON.stringify(status).includes('private'), false);
+  await send({ type: 'DIAGNOSTICS_CLEAR' }, diag);
+  await send({ type: 'DIAGNOSTIC_EVENT', trace, event: { stage: 'display', outcome: 'shown' } });
+  assert.equal((await send({ type: 'DIAGNOSTICS_STATUS' }, diag)).events.length, 0);
 });

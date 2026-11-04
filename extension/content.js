@@ -26,6 +26,9 @@
   }
   const debug = chrome.runtime.getManifest().version_name?.endsWith('-development') === true;
   document.documentElement?.setAttribute('data-fg-debug', String(debug));
+  const pageId = crypto.randomUUID();
+  let nextPost = 0, diagnosticConfig = { enabled: false };
+  const traceEvent = (trace, event) => { if (trace) void chrome.runtime.sendMessage({ type: 'DIAGNOSTIC_EVENT', trace, event }).catch(() => {}); };
   const records = new Map();
   const cache = new Map();
   let enabled = true, consent = false, configured = false, localImageCheck = false, running = 0, timer, wakeTimer, serviceReadyAt = 0, url = location.href;
@@ -250,7 +253,7 @@
     const retry = document.createElement('button'); retry.textContent = '重試'; retry.type = 'button';
     const show = document.createElement('button'); show.textContent = '顯示此貼文'; show.type = 'button';
     card.append(title, detail, retry, show); ui.append(card);
-    const record = { root, ui, title, detail, retry, inert: new Map(), videos: new Map(), signature: '', version: 0, state: 'pending', readyAt: 0, initialTop: initialRect.top + scrollY };
+    const record = { post: ++nextPost, root, ui, title, detail, retry, inert: new Map(), videos: new Map(), signature: '', version: 0, state: 'pending', readyAt: 0, initialTop: initialRect.top + scrollY };
     root.append(ui); records.set(root, record);
     show.addEventListener('click', event => {
       event.preventDefault(); event.stopPropagation(); record.version++;
@@ -313,6 +316,8 @@
     if (cache.size > 300) cache.delete(cache.keys().next().value);
   }
   async function check(record) {
+    const trace = diagnosticConfig.enabled ? { id: crypto.randomUUID(), page: pageId, post: record.post, epoch: diagnosticConfig.epoch } : undefined;
+    traceEvent(trace, { stage: 'precheck', outcome: 'start', chars: record.payload?.text?.length, images: record.payload?.images?.length });
     const version = record.version;
     const sig = record.signature;
     const payload = record.payload;
@@ -325,17 +330,19 @@
       const key = await digest(`${localImageCheck}:` + sig);
       let decision = cache.get(key);
       if (!decision) {
-        const result = await chrome.runtime.sendMessage({ type: 'MODERATE', payload });
+        const result = await chrome.runtime.sendMessage({ type: 'MODERATE', payload, trace });
         if (!result?.ok) throw Object.assign(new Error(result?.error || 'UNKNOWN_ERROR'), { retryAfterMs: result?.retryAfterMs });
         if (!['allow', 'block'].includes(result.decision)) throw new Error('INVALID_RESPONSE');
-        if (!current()) return;
+        if (!current()) { traceEvent(trace, { stage: 'display', outcome: 'stale' }); return; }
         decision = result.decision; remember(key, decision);
-      }
-      if (!current()) return;
+      } else traceEvent(trace, { stage: 'cache', outcome: decision });
+      if (!current()) { traceEvent(trace, { stage: 'display', outcome: 'stale' }); return; }
       // Check again after the API response even if an observer callback was delayed.
-      if (snapshot(record.root).signature !== sig) { inspect(record); return; }
+      if (snapshot(record.root).signature !== sig) { traceEvent(trace, { stage: 'display', outcome: 'stale' }); inspect(record); return; }
       render(record, decision);
+      traceEvent(trace, { stage: 'display', outcome: decision === 'allow' ? 'shown' : 'hidden' });
     } catch (error) {
+      traceEvent(trace, { stage: 'display', outcome: current() ? 'hidden' : 'stale', error: error.message, retryAfterMs: error.retryAfterMs });
       if (current()) {
         if (['WAITING_CAPACITY', 'BUSY', 'USAGE_LIMIT', 'SERVICE_COOLDOWN', 'SERVICE_UNREACHABLE', 'SERVICE_UNAVAILABLE', 'PROVIDER_UNREACHABLE', 'SESSION_REQUIRED'].includes(error.message)) {
           const fallback = error.message === 'BUSY' ? 2000 : 65000;
@@ -391,6 +398,7 @@
     try {
       const r = await chrome.runtime.sendMessage({ type: 'CONFIG' });
       if (!r?.ok) return;
+      diagnosticConfig = r.diagnostics || { enabled: false };
       const changed = enabled !== r.enabled || consent !== r.consent || configured !== r.configured || localImageCheck !== Boolean(r.localImageCheck);
       enabled = Boolean(r.enabled); consent = Boolean(r.consent); configured = Boolean(r.configured);
       localImageCheck = Boolean(r.localImageCheck);
@@ -446,6 +454,10 @@
     if (location.href !== url) { url = location.href; cache.clear(); scan(); }
   }, 250);
   chrome.runtime.onMessage.addListener((m, _, reply) => {
+    if (m.type === 'DIAGNOSTICS_CHANGED') {
+      void chrome.runtime.sendMessage({ type: 'CONFIG' }).then(r => { if (r?.ok) diagnosticConfig = r.diagnostics || { enabled: false }; }).catch(() => {});
+      return;
+    }
     if (m.type === 'CONFIG_CHANGED') { void configure(); return; }
     if (m.type === 'STATUS') {
       const list = [...records.values()];

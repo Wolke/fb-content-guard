@@ -37,12 +37,17 @@ try {
   const sessionResponse = await request('/v1/session');
   assert.equal(sessionResponse.status, 200, await sessionResponse.clone().text());
   const { token } = await sessionResponse.json();
-  const body = { text: 'synthetic fixture', images: ['data:image/png;base64,iVBORw0KGgo='] };
+  const body = { text: 'synthetic fixture', images: ['data:image/png;base64,iVBORw0KGgo='], diagnostics: true };
   const results = await Promise.all(Array.from({ length: 6 }, () => request('/v1/moderate', token, body)));
   assert.equal(results.filter(x => x.status === 200).length, 2);
   assert.equal(results.filter(x => x.status === 429).length, 4);
   assert.equal(calls, 2);
   assert.equal((await db.prepare("SELECT COUNT(*) AS n FROM usage_events WHERE kind='moderation'").first()).n, 2);
-  for (const response of results.filter(x => x.status === 200)) assert.deepEqual(await response.json(), { decision: 'allow' });
+  for (const response of results.filter(x => x.status === 200)) {
+    const data = await response.json(); assert.equal(data.decision, 'allow');
+    assert.equal(data.diagnostics.version, 1); assert.equal(data.diagnostics.events[0].sexual, false);
+    assert.equal(data.diagnostics.events[0].http, 200);
+    assert.equal(JSON.stringify(data).includes('fake-test-key'), false);
+  }
   console.log('PASS workerd: anonymous session, HMAC, D1 migration, image payload, provider boundary and atomic quota under six simultaneous requests');
 } finally { await mf.dispose(); }

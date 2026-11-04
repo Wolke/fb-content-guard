@@ -15,12 +15,13 @@ async function fixture(html, config = {}) {
   const page = await context.newPage();
   const mock = `
     window.testConfig = ${JSON.stringify({ enabled: true, consent: true, configured: true, debug: true, ...config })};
-    window.calls = []; window.handlers = []; window.releaseHeld = null;
+    window.calls = []; window.diagnosticEvents = []; window.handlers = []; window.releaseHeld = null;
     window.chrome = { runtime: {
       getManifest: () => ({version_name: window.testConfig.debug ? '0.2.3-development' : '0.2.3'}),
       onMessage: { addListener: fn => window.handlers.push(fn) },
       sendMessage: async message => {
         if (message.type === 'CONFIG') return {ok:true,...window.testConfig};
+        if (message.type === 'DIAGNOSTIC_EVENT') { window.diagnosticEvents.push(message); return {ok:true}; }
         window.calls.push(message.payload);
         if(message.payload.text.includes('HOLD')) return new Promise(resolve => window.releaseHeld = resolve);
         await new Promise(resolve => setTimeout(resolve, 120));
@@ -57,6 +58,46 @@ async function run(name, fn) {
   }
 }
 try {
+  await run('diagnostics trace precheck, API and display without recording content', async () => {
+    const page = await fixture(post('diagnostic-normal','NORMAL private-content') + post('diagnostic-fail','FAIL private-content'), {debug:false,diagnostics:{enabled:true,epoch:'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'}});
+    await state(page,'diagnostic-normal','allow'); await state(page,'diagnostic-fail','error');
+    const events = await page.evaluate(()=>window.diagnosticEvents);
+    assert.ok(events.some(e=>e.event.stage==='display'&&e.event.outcome==='shown'));
+    assert.ok(events.some(e=>e.event.stage==='display'&&e.event.error==='ANALYSIS_UNAVAILABLE'));
+    assert.equal(JSON.stringify(events).includes('private-content'),false);
+    const before = await page.evaluate(()=>window.calls.length);
+    await page.evaluate(()=>window.handlers.forEach(fn=>fn({type:'DIAGNOSTICS_CHANGED'},{},()=>{})));
+    await page.waitForTimeout(500);
+    assert.equal(await page.evaluate(()=>window.calls.length),before);
+    await page.close();
+  });
+  await run('diagnostic page renders safe details, filters, clears and toggles recording', async () => {
+    const page = await context.newPage();
+    const html = await readFile(new URL('../extension/diagnostics.html', import.meta.url),'utf8');
+    const style = await readFile(new URL('../extension/diagnostics.css', import.meta.url),'utf8');
+    const js = await readFile(new URL('../extension/diagnostics.js', import.meta.url),'utf8');
+    const epoch='aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', id='bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb', stamp=Date.now();
+    const events = [
+      {id,page:epoch,tab:1,post:1,at:stamp,stage:'cloud',outcome:'sent'},
+      {id,page:epoch,tab:1,post:1,at:stamp+120,stage:'openai',outcome:'allow',sexual:false,sexualScore:0.02,http:200,ms:120},
+      {id,page:epoch,tab:1,post:1,at:stamp+300,stage:'local',outcome:'uncertain',error:'LOCAL_UNCERTAIN',image:1,ms:180},
+      {id,page:epoch,tab:1,post:1,at:stamp+301,stage:'display',outcome:'hidden',error:'LOCAL_UNCERTAIN'}
+    ];
+    const mock=`window.chrome={runtime:{getManifest:()=>({version:'0.2.5'}),sendMessage:async m=>{if(m.type==='DIAGNOSTICS_ENABLE'){window.diag.enabled=m.enabled;window.diag.events=[];}if(m.type==='DIAGNOSTICS_CLEAR')window.diag.events=[];return {ok:true,...window.diag};}}};window.diag=${JSON.stringify({enabled:true,modelReady:true,events})};`;
+    await page.route('https://diagnostics.test/**',route=>route.fulfill({contentType:route.request().url().endsWith('.js')?'text/javascript':route.request().url().endsWith('.css')?'text/css':'text/html',body:route.request().url().endsWith('.js')?js:route.request().url().endsWith('.css')?style:html.replace('<script type="module"',`<script>${mock}</script><script type="module"`)}));
+    await page.goto('https://diagnostics.test/');
+    await page.getByText('貼文 #1 · 分頁 1').first().waitFor();
+    await page.locator('article summary').click();
+    assert.ok(await page.getByText(/sexualScore=0.02/).isVisible());
+    await page.locator('#filter').selectOption('shown');assert.equal(await page.locator('article').count(),0);
+    await page.locator('#filter').selectOption('all');
+    await page.locator('article summary').click();
+    await mkdir(new URL('../test-results/',import.meta.url),{recursive:true});
+    await page.screenshot({path:fileURLToPath(new URL('../test-results/diagnostics-preview.png',import.meta.url)),fullPage:true});
+    await page.getByRole('button',{name:'清除紀錄'}).click();await page.waitForFunction(()=>!document.querySelector('article'));
+    await page.locator('#enabled').uncheck();await page.getByText('已關閉並清除本機診斷紀錄。').waitFor();
+    await page.close();
+  });
   await run('enabling local check invalidates cached allows and keeps uncertainty hidden', async () => {
     const page = await fixture(post('local', 'LOCAL 圖片檢查測試'), { debug: false });
     await state(page, 'local', 'allow');

@@ -68,3 +68,16 @@ test('provider cooldown codes survive client translation', async () => {
   const { client } = fixture(() => Response.json({error:'SERVICE_COOLDOWN'}, {status:429}));
   await assert.rejects(client.moderate({text:'x',images:[]},opts()), /SERVICE_COOLDOWN/);
 });
+
+test('diagnostics distinguish actual requests, old backend unknowns and sanitized provider results', async () => {
+  const events=[];
+  const {client}=fixture(url=>Response.json(url.endsWith('/session')?{token:'secret',expiresAt:Date.now()+3600000}:{decision:'allow',diagnostics:{version:1,providerAttempted:true,events:[{outcome:'allow',sexualScore:0.1,token:'secret',raw:'secret'}]}}));
+  await client.moderate({text:'private',images:[],diagnostics:true},{...opts(),onEvent:e=>events.push(e)});
+  assert.ok(events.some(e=>e.stage==='session'&&e.outcome==='sent'));
+  assert.ok(events.some(e=>e.stage==='cloud'&&e.http===200));
+  assert.ok(events.some(e=>e.stage==='openai'&&e.sexualScore===0.1));
+  assert.equal(JSON.stringify(events).includes('secret'),false);
+  const old=fixture();const oldEvents=[];
+  await old.client.moderate({text:'x',images:[],diagnostics:true},{...opts(),onEvent:e=>oldEvents.push(e)});
+  assert.ok(oldEvents.some(e=>e.stage==='openai'&&e.detailAvailable===false));
+});

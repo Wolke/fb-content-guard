@@ -95,3 +95,11 @@ test('provider rate limits trigger cooldown without exposing provider text', asy
   assert.equal(response.status, 429);
   assert.deepEqual(await response.json(), { error: 'SERVICE_COOLDOWN' });
 });
+
+test('quota diagnostics explicitly identify no provider call, only when opted in', async () => {
+  const {handler,calls}=fixture({reserveQuota:async()=>false});
+  const response=await handler(request({text:'x',images:[],diagnostics:true}));
+  const data=await response.json();
+  assert.deepEqual(data.diagnostics,{version:1,providerAttempted:false,events:[]});
+  assert.equal(calls.some(([kind])=>kind==='provider'),false);
+});

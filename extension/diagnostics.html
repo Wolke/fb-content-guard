@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>清朗 · 檢查診斷</title><link rel="stylesheet" href="diagnostics.css"></head>
+<body><main>
+<header><p class="eyebrow">清朗 / 本機除錯</p><h1>每一則，停在哪一步？</h1><p>查看 API 呼叫、模型判定與最後顯示狀態。未完成檢查的內容仍保持隱藏。</p></header>
+<section class="controls" aria-label="診斷控制">
+<label><input id="enabled" type="checkbox"> 記錄診斷與背景 debug 訊息</label>
+<p class="muted">預設關閉。僅記錄啟用後的新檢查；最多保留 600 筆事件；讀取或寫入時清除超過 6 小時的紀錄，瀏覽器結束即清除。關閉記錄也會清除。無貼文文字、圖片、網址、金鑰或模型原始回覆。</p>
+<div class="buttons"><button id="refresh">重新整理紀錄</button><button id="export">匯出 JSON</button><button id="clear">清除紀錄</button><label><input id="auto" type="checkbox"> 每 3 秒更新</label></div>
+<p id="status" role="status" aria-live="polite"></p>
+</section>
+<section class="summary" aria-label="目前狀態"><div><span>模型連線</span><strong id="model">讀取中</strong></div><div><span>檢查嘗試 / 事件</span><strong id="count">—</strong></div><div><span>記錄範圍</span><strong>本次瀏覽器工作階段</strong></div></section>
+<details class="guide"><summary>怎麼讀這些結果？ / API 對照</summary>
+<p>「已嘗試送出」表示擴充功能呼叫了網路 API，不保證伺服器已收到。「未提供」表示後台沒有提供 OpenAI 呼叫明細，不能推論 OpenAI 是否收到。「未記錄送出」也可能是記錄啟用太晚。</p>
+<ul><li>匿名憑證：清朗 <code>POST /v1/session</code>；重用有效憑證時不重送。</li><li>雲端分類：清朗 <code>POST /v1/moderate</code>；服務為 <code>fb-content-guard.wolkesau.workers.dev</code>。</li><li>OpenAI：<code>POST https://api.openai.com/v1/moderations</code>，模型 <code>omni-moderation-latest</code>。逐張送出，任何 sexual 或 sexual/minors 旗標為 true 即阻擋；分數僅作診斷，並非色情機率，也不改變判定門檻。</li><li>本機圖片：Chrome <code>LanguageModel.prompt()</code> / Gemini Nano。只在雲端放行且加強檢查開啟時執行，接受 ALLOW / BLOCK / UNCERTAIN，不回傳分類分數。</li><li>本機未就緒、圖片讀取失敗或額度不足可能讓流程在雲端請求之前停止。快取命中不代表重新呼叫 API。舊結果被丟棄不代表放行。</li></ul>
+<p>紀錄使用暫時的分頁與貼文編號；同一貼文重試會有多筆嘗試，重新整理會產生新的頁面代碼。這不是完整瀏覽歷史，舊事件可能已被清除。背景 Service Worker 主控台會同步輸出 <code>[清朗診斷]</code> 訊息；已輸出的主控台紀錄需另外清除。</p></details>
+<div class="filter"><h2>檢查時間線</h2><label>篩選 <select id="filter"><option value="all">全部</option><option value="errors">失敗／不確定</option><option value="hidden">最後隱藏</option><option value="blocked">模型判定阻擋</option><option value="shown">已顯示</option></select></label></div>
+<p id="empty" class="empty">尚無紀錄。啟用後，回到 Facebook 瀏覽新貼文。重新整理 FB 可重新觀察，但可能再次使用雲端額度。</p><div id="entries"></div>
+</main><script type="module" src="diagnostics.js"></script></body></html>
