@@ -26,6 +26,7 @@ async function fixture(html, config = {}) {
         await new Promise(resolve => setTimeout(resolve, 120));
         if(message.payload.text.includes('THROTTLE') && window.calls.filter(p=>p.text.includes('THROTTLE')).length === 1) return {ok:false,error:'USAGE_LIMIT',retryAfterMs:1000};
         if(message.payload.text.includes('FAIL')) return {ok:false,error:'ANALYSIS_UNAVAILABLE'};
+        if(window.testConfig.localImageCheck && message.payload.text.includes('LOCAL')) return {ok:false,error:'LOCAL_UNCERTAIN'};
         return {ok:true,decision:message.payload.text.includes('BLOCK')?'block':'allow'};
       }
     }};
@@ -56,6 +57,17 @@ async function run(name, fn) {
   }
 }
 try {
+  await run('enabling local check invalidates cached allows and keeps uncertainty hidden', async () => {
+    const page = await fixture(post('local', 'LOCAL 圖片檢查測試'), { debug: false });
+    await state(page, 'local', 'allow');
+    await page.evaluate(() => window.updateConfig({localImageCheck:true}));
+    await state(page, 'local', 'error');
+    assert.equal(await page.locator('#local').evaluate(e => getComputedStyle(e).display), 'none');
+    assert.equal(await page.evaluate(() => window.calls.length), 2);
+    await page.evaluate(() => window.updateConfig({localImageCheck:false}));
+    await state(page, 'local', 'allow');
+    await page.close();
+  });
   await run('shield before response, allow ordinary content, collapse flagged content', async () => {
     const page = await fixture(post('normal', 'HOLD 一般文字') + post('blocked', 'BLOCK 分類測試佔位文字'));
     await state(page, 'normal', 'pending');

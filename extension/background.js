@@ -1,9 +1,16 @@
 import { createAnalysisBudget } from './analysis-budget.js';
 import { cloudImageDataUrl } from './net.js';
 import { CONSENT_VERSION, createServiceClient, validServiceOrigin } from './service-client.js';
+import { createLocalBridge } from './local-bridge.js';
 
-const DEFAULTS = { enabled: true, consentVersion: '' };
+const DEFAULTS = { enabled: true, consentVersion: '', localImageCheck: false };
 const active = new Set();
+async function notifyConfig() {
+  const tabs = await chrome.tabs.query({ url: 'https://www.facebook.com/*' });
+  for (const tab of tabs) chrome.tabs.sendMessage(tab.id, { type: 'CONFIG_CHANGED' }).catch(() => {});
+}
+const local = createLocalBridge({ runtime: chrome.runtime, onReady: () => { void notifyConfig().catch(() => {}); } });
+let settingsRevision = 0;
 const budget = createAnalysisBudget({
   read: async () => (await chrome.storage.session.get('analysisBudget')).analysisBudget,
   write: analysisBudget => chrome.storage.session.set({ analysisBudget })
@@ -33,20 +40,23 @@ async function checkConsent() {
 }
 async function handle(message, sender) {
   if (!isFacebook(sender) && !isPopup(sender)) throw Error('FORBIDDEN');
+  const revision = settingsRevision;
   const cfg = await settings();
   const { configured, client } = await ready;
-  if (message.type === 'CONFIG') return { enabled: cfg.enabled, consent: cfg.consentVersion === CONSENT_VERSION, configured };
+  if (message.type === 'CONFIG') return { enabled: cfg.enabled, consent: cfg.consentVersion === CONSENT_VERSION, configured, localImageCheck: Boolean(cfg.localImageCheck) };
   if (message.type === 'HEALTH' && isPopup(sender)) return client.health();
   if (message.type !== 'MODERATE' || !isFacebook(sender)) throw Error('FORBIDDEN');
   await checkConsent();
   if (!configured) throw Error('SERVICE_NOT_CONFIGURED');
-  if (active.size >= 2) throw Object.assign(Error('BUSY'), { retryAfterMs: 2000 });
+  if (active.size >= (cfg.localImageCheck ? 1 : 2)) throw Object.assign(Error('BUSY'), { retryAfterMs: 2000 });
   const p = message.payload;
   if (!p || typeof p.text !== 'string' || p.text.length > 16000 || !Array.isArray(p.images) || p.images.length > 12 ||
       p.images.some(x => typeof x !== 'string')) throw Error('INVALID_CONTENT');
   const units = Math.max(1, p.images.length);
+  if (revision !== settingsRevision) throw Error('LOCAL_CANCELLED');
+  if (cfg.localImageCheck && p.images.length) local.assertReady();
   await budget.check(units);
-  if (active.size >= 2) throw Object.assign(Error('BUSY'), { retryAfterMs: 2000 });
+  if (active.size >= (cfg.localImageCheck ? 1 : 2)) throw Object.assign(Error('BUSY'), { retryAfterMs: 2000 });
   const controller = new AbortController();
   active.add(controller);
   try {
@@ -64,7 +74,13 @@ async function handle(message, sender) {
     try {
       const result = await client.moderate({ text: p.text, images }, { signal: controller.signal, checkConsent });
       await budget.success();
-      return result;
+      if (controller.signal.aborted || settingsRevision !== revision) throw Error('LOCAL_CANCELLED');
+      if (!['allow', 'block'].includes(result.decision)) throw Error('INVALID_RESPONSE');
+      const final = result.decision === 'allow' && cfg.localImageCheck && images.length
+        ? await local.classify(images, { signal: controller.signal }) : result;
+      await checkConsent();
+      if (controller.signal.aborted || settingsRevision !== revision) throw Error('LOCAL_CANCELLED');
+      return final;
     } catch (error) {
       if (['USAGE_LIMIT', 'SERVICE_COOLDOWN', 'SERVICE_UNREACHABLE', 'SERVICE_UNAVAILABLE', 'PROVIDER_UNREACHABLE'].includes(error.message)) {
         error.retryAfterMs = await budget.pause();
@@ -80,9 +96,10 @@ chrome.runtime.onMessage.addListener((message, sender, reply) => {
   return true;
 });
 chrome.storage.onChanged.addListener(async (changes, area) => {
-  if (area !== 'local' || !('enabled' in changes || 'consentVersion' in changes)) return;
+  if (area !== 'local' || !('enabled' in changes || 'consentVersion' in changes || 'localImageCheck' in changes)) return;
+  settingsRevision++;
   for (const controller of active) controller.abort();
+  local.cancel();
   try { await (await ready).client.clear(); } catch { /* No external requests. */ }
-  const tabs = await chrome.tabs.query({ url: 'https://www.facebook.com/*' });
-  for (const tab of tabs) chrome.tabs.sendMessage(tab.id, { type: 'CONFIG_CHANGED' }).catch(() => {});
+  await notifyConfig();
 });

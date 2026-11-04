@@ -1,0 +1,13 @@
+<!doctype html>
+<html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>清朗 · 本機圖片檢查</title><link rel="stylesheet" href="local-ai.css"></head>
+<body><main>
+<h1>本機圖片檢查 <small>實驗功能</small></h1>
+<p>在雲端檢查之外，再由 Chrome 的 Gemini Nano 檢查圖片中的色情、性暗示與性功能推銷。圖片不會因這道本機檢查傳給 Google；原有雲端分析及用量限制仍然適用。</p>
+<p>首次使用需下載模型並佔用磁碟空間。請保留此分頁，可以切回 Facebook；關閉、休眠或模型失敗時，尚未完成檢查的圖片貼文會繼續隱藏。</p>
+<p>中文辨識與分類可能出錯，並非專用 OCR。可能每張耗時數秒至數十秒，不適合所有電腦。</p>
+<button id="start" disabled>下載／啟用本機模型</button>
+<label>模型下載 <progress id="progress" max="1" value="0"></progress></label>
+<p id="status" role="status" aria-live="polite">正在檢查支援能力…</p>
+<p id="stats">本次完成 0 則</p>
+<p>啟用後，請回到清朗設定，勾選「加強圖片檢查」並儲存。未勾選前不會自動分析貼文。</p>
+</main><script src="local-ai.js" type="module"></script></body></html>

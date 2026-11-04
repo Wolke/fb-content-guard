@@ -7,6 +7,8 @@
     <p class="hint">先隱藏，檢查後再顯示。檢查 FB 首頁目前載入的文字、圖片及影片預覽；展開後再檢查新內容，不檢查整段影片。</p>
     <label class="consent"><input id="consent" type="checkbox"><span>我同意將首頁貼文與右側贊助廣告的文字與圖片（含影片封面或單張畫面），傳至清朗的雲端服務，再交由 OpenAI 分析色情內容。可能包含作者、留言及圖片中的個人資訊。</span></label>
     <p class="hint">不需要登入。服務會使用短期匿名代碼及網路來源的派生識別碼限制用量；不將貼文原文或圖片存進資料庫。<a href="https://wolke.github.io/fb-content-guard/privacy-cloud.html" target="_blank" rel="noopener">閱讀雲端版隱私權政策</a></p>
+    <label class="consent"><input id="localImageCheck" type="checkbox"><span>加強圖片檢查（實驗）：雲端通過後，再用 Chrome 本機模型檢查性暗示。需先啟用模型並保留模型分頁；不確定或失敗就繼續隱藏。仍需雲端同意與額度。</span></label>
+    <button id="openLocal">開啟本機模型設定</button>
     <button id="save" class="primary">儲存設定</button>
     <button id="health">檢查服務狀態</button>
     <p id="status" role="status" aria-live="polite"></p>

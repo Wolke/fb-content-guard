@@ -28,12 +28,17 @@
   document.documentElement?.setAttribute('data-fg-debug', String(debug));
   const records = new Map();
   const cache = new Map();
-  let enabled = true, consent = false, configured = false, running = 0, timer, wakeTimer, serviceReadyAt = 0, url = location.href;
+  let enabled = true, consent = false, configured = false, localImageCheck = false, running = 0, timer, wakeTimer, serviceReadyAt = 0, url = location.href;
   const supported = () => location.hostname === 'www.facebook.com' && ['/', '/home.php'].includes(location.pathname);
   const active = () => enabled && supported();
   const setActive = () => document.documentElement?.setAttribute('data-fg-active', String(active()));
   setActive();
   const ERRORS = {
+    LOCAL_NOT_READY: '本機模型尚未啟用或分頁已關閉。請從設定開啟模型分頁。',
+    LOCAL_UNCERTAIN: '本機模型無法確定，保持隱藏。',
+    LOCAL_INVALID_RESPONSE: '本機模型回覆無效，保持隱藏。',
+    LOCAL_FAILED: '本機圖片檢查未完成，保持隱藏。',
+    LOCAL_TIMEOUT: '本機模型逾時，保持隱藏。',
     CONSENT_REQUIRED: '請先在擴充功能設定中同意送出內容分析。',
     SERVICE_NOT_CONFIGURED: '此版本尚未連接正式服務，請等待開發者完成部署。',
     SESSION_REQUIRED: '連線已到期，請稍後重試。',
@@ -214,7 +219,7 @@
     const names = { waiting: '等待分析', pending: '正在檢查貼文', block: '已隱藏：疑似色情', error: '這則貼文尚未通過檢查' };
     record.title.textContent = names[state] || '';
     record.detail.textContent = state === 'waiting' ? (['EMPTY_CONTENT', 'INCOMPLETE_IMAGES', 'VIDEO_PREVIEW_UNAVAILABLE'].includes(error) ? '等待貼文內容載入；載入後會自動檢查。' : '依服務額度排隊，稍後會自動重試。') : state === 'pending' ? '先遮住內容，完成檢查後再顯示。' :
-      state === 'block' ? '由 OpenAI 色情內容分類判定；你可以選擇顯示。' : (ERRORS[error] || '檢查未完成，請稍後重試或手動顯示。');
+      state === 'block' ? '內容檢查判定需要遮擋；你可以選擇顯示。' : (ERRORS[error] || '檢查未完成，請稍後重試或手動顯示。');
     record.retry.hidden = state !== 'error';
     // inert prevents focus/keyboard interaction with invisible original content.
     const shielded = !['allow', 'manual'].includes(state) && active();
@@ -317,12 +322,13 @@
       if (!consent) throw new Error('CONSENT_REQUIRED');
       if (!configured) throw new Error('SERVICE_NOT_CONFIGURED');
       if (record.problem) throw new Error(record.problem);
-      const key = await digest(sig);
+      const key = await digest(`${localImageCheck}:` + sig);
       let decision = cache.get(key);
       if (!decision) {
         const result = await chrome.runtime.sendMessage({ type: 'MODERATE', payload });
         if (!result?.ok) throw Object.assign(new Error(result?.error || 'UNKNOWN_ERROR'), { retryAfterMs: result?.retryAfterMs });
         if (!['allow', 'block'].includes(result.decision)) throw new Error('INVALID_RESPONSE');
+        if (!current()) return;
         decision = result.decision; remember(key, decision);
       }
       if (!current()) return;
@@ -385,8 +391,10 @@
     try {
       const r = await chrome.runtime.sendMessage({ type: 'CONFIG' });
       if (!r?.ok) return;
-      const changed = enabled !== r.enabled || consent !== r.consent || configured !== r.configured;
+      const changed = enabled !== r.enabled || consent !== r.consent || configured !== r.configured || localImageCheck !== Boolean(r.localImageCheck);
       enabled = Boolean(r.enabled); consent = Boolean(r.consent); configured = Boolean(r.configured);
+      localImageCheck = Boolean(r.localImageCheck);
+      if (changed) { cache.clear(); serviceReadyAt = 0; }
       if (changed) for (const record of records.values()) { record.signature = ''; record.version++; }
       else for (const record of records.values()) if (record.state === 'error') { record.signature = ''; record.version++; }
       setActive(); scan();

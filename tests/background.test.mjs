@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-let listener, changeListener;
+let listener, changeListener, connectListener;
 let cfg = { enabled: true, consentVersion: 'cloud-v1' };
 let session, analysisBudget;
 const requests = [];
@@ -10,7 +10,7 @@ globalThis.chrome = {
   storage: { local: { setAccessLevel: async () => {}, get: async () => ({ ...cfg }), remove: async () => {} },
     session: { setAccessLevel: async () => {}, get: async () => ({ cloudSession: session, analysisBudget }), set: async v => { if ('cloudSession' in v) session = v.cloudSession; if ('analysisBudget' in v) analysisBudget = v.analysisBudget; } },
     onChanged: { addListener: fn => { changeListener = fn; } } },
-  runtime: { getURL: path => 'chrome-extension://test/' + path, onMessage: { addListener: fn => listener = fn } },
+  runtime: { id: 'test', getURL: path => 'chrome-extension://test/' + path, onMessage: { addListener: fn => listener = fn }, onConnect: { addListener: fn => connectListener = fn } },
   tabs: { query: async () => [], sendMessage: async () => {} }
 };
 globalThis.createImageBitmap = async () => ({ width: 10, height: 10, close() {} });
@@ -28,7 +28,7 @@ globalThis.fetch = async (url, init) => {
 await import('../extension/background.js');
 const send = (message, sender = fb) => new Promise(resolve => listener(message, sender, resolve));
 test('content configuration exposes neither anonymous token nor old pairing secret', async () => {
-  assert.deepEqual(await send({ type: 'CONFIG' }), { ok: true, enabled: true, consent: true, configured: true });
+  assert.deepEqual(await send({ type: 'CONFIG' }), { ok: true, enabled: true, consent: true, configured: true, localImageCheck: false });
 });
 test('only Facebook content scripts can submit moderation', async () => {
   const payload = { text: 'normal', images: [] };
@@ -73,4 +73,27 @@ test('withdrawing consent clears the anonymous session and blocks subsequent upl
   requests.length = 0;
   assert.equal((await send({ type: 'MODERATE', payload: { text: 'private', images: [] } })).error, 'CONSENT_REQUIRED');
   assert.equal(requests.length, 0);
+});
+test('experimental image check gates a cloud allow and never uploads when model is missing', async () => {
+  cfg = { enabled: true, consentVersion: 'cloud-v1', localImageCheck: true };
+  analysisBudget = undefined; requests.length = 0;
+  const payload = { text: 'ad', images: ['https://s.fbcdn.net/ad'] };
+  assert.equal((await send({ type: 'MODERATE', payload })).error, 'LOCAL_NOT_READY');
+  assert.equal(requests.length, 0);
+  let receive, disconnect, decision = 'block', fail = false;
+  const port = {
+    name: 'local-model', sender: { id: 'test', url: 'chrome-extension://test/local-ai.html' },
+    onMessage: { addListener: fn => receive = fn }, onDisconnect: { addListener: fn => disconnect = fn },
+    postMessage: m => { if (m.type === 'CLASSIFY') queueMicrotask(() => receive({ type: 'RESULT', id: m.id, ok: !fail, decision, error: 'LOCAL_UNCERTAIN' })); }
+  };
+  connectListener(port); receive({ type: 'READY' });
+  assert.equal((await send({ type: 'MODERATE', payload })).decision, 'block');
+  decision = 'allow';
+  assert.equal((await send({ type: 'MODERATE', payload })).decision, 'allow');
+  fail = true;
+  assert.equal((await send({ type: 'MODERATE', payload })).error, 'LOCAL_UNCERTAIN');
+  disconnect();
+  assert.equal((await send({ type: 'MODERATE', payload })).error, 'LOCAL_NOT_READY');
+  // Text-only posts retain the original cloud workflow.
+  assert.equal((await send({ type: 'MODERATE', payload: { text: 'text', images: [] } })).decision, 'allow');
 });

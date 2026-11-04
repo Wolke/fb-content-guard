@@ -1,8 +1,9 @@
 import { CONSENT_VERSION } from './service-client.js';
 const $ = id => document.getElementById(id);
 await chrome.storage.local.setAccessLevel({ accessLevel: 'TRUSTED_CONTEXTS' });
-const cfg = await chrome.storage.local.get({ enabled: true, consentVersion: '' });
+const cfg = await chrome.storage.local.get({ enabled: true, consentVersion: '', localImageCheck: false });
 $('enabled').checked = cfg.enabled;
+$('localImageCheck').checked = cfg.localImageCheck;
 $('consent').checked = cfg.consentVersion === CONSENT_VERSION;
 if (!$('consent').checked) $('status').textContent = '請先閱讀並同意雲端分析說明。未同意前不會送出貼文。';
 const errors = {
@@ -14,8 +15,15 @@ const errors = {
 };
 $('save').addEventListener('click', async () => {
   await chrome.storage.local.set({ enabled: $('enabled').checked,
+    localImageCheck: $('localImageCheck').checked,
     consentVersion: $('consent').checked ? CONSENT_VERSION : '' });
   $('status').textContent = $('consent').checked ? '已儲存。首次使用請重新整理 Facebook 首頁。' : '已停止新的雲端分析。已送出的請求可能仍會完成。';
+});
+$('openLocal').addEventListener('click', async () => {
+  const url = chrome.runtime.getURL('local-ai.html');
+  const tabs = await chrome.runtime.getContexts({ contextTypes: ['TAB'], documentUrls: [url] });
+  if (tabs.length) await chrome.tabs.update(tabs[0].tabId, { active: true });
+  else await chrome.tabs.create({ url });
 });
 $('health').addEventListener('click', async () => {
   $('health').disabled = true;
@@ -33,7 +41,10 @@ try {
     UNSUPPORTED_ROLE_IMAGE: '圖片缺少來源', UNSUPPORTED_EMBED: '嵌入內容不支援',
     TOO_MANY_IMAGES: '圖片超過 12 張', IMAGE_FETCH_FAILED: '圖片下載失敗',
     IMAGE_TOO_LARGE: '單張圖片過大', IMAGES_TOO_LARGE: '圖片總量過大',
-    LONG_TEXT: '文字過長', ANIMATED_IMAGE: '動態圖片不支援', ANALYSIS_UNAVAILABLE: '雲端分析未完成'
+    LONG_TEXT: '文字過長', ANIMATED_IMAGE: '動態圖片不支援', ANALYSIS_UNAVAILABLE: '雲端分析未完成',
+    LOCAL_NOT_READY: '本機模型未啟用／分頁已關閉', LOCAL_UNCERTAIN: '本機模型不確定',
+    LOCAL_INVALID_RESPONSE: '本機回覆無效', LOCAL_TIMEOUT: '本機檢查逾時',
+    LOCAL_FAILED: '本機檢查失敗', LOCAL_CONTEXT_OVERFLOW: '本機內容超過容量', LOCAL_CANCELLED: '本機檢查已取消'
   };
   const details = Object.entries(s.errorReasons || {}).map(([code, count]) => `${reasons[code] || '其他分析錯誤'}：${count}`).join('；');
   $('stats').textContent = !s.supported ? '目前頁面不在支援範圍，請開啟 www.facebook.com 首頁。' :
